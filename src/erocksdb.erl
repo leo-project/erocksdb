@@ -1,8 +1,8 @@
-%% -------------------------------------------------------------------
+%%======================================================================
 %%
-%%  eleveldb: Erlang Wrapper for LevelDB (http://code.google.com/p/leveldb/)
+%% erocksdb: Erlang Wrapper for RocksDB (https://github.com/facebook/rocksdb)
 %%
-%% Copyright (c) 2010-2012 Basho Technologies, Inc. All Rights Reserved.
+%% Copyright (c) 2012-2014 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -18,310 +18,389 @@
 %% specific language governing permissions and limitations
 %% under the License.
 %%
-%% -------------------------------------------------------------------
--module(eleveldb).
+%% @doc Erlang Wrapper for RocksDB
+%% @reference https://github.com/leo-project/erocksdb/blob/master/src/erocksdb.erl
+%% @end
+%%======================================================================
+-module(erocksdb).
 
--export([open/2,
-         close/1,
-         get/3,
-         put/4,
-         delete/3,
-         write/3,
-         fold/4,
-         fold_keys/4,
-         status/2,
-         destroy/2,
-         repair/2,
-         is_empty/1]).
-
--export([option_types/1,
-         validate_options/2]).
-
--export([iterator/2,
-         iterator/3,
-         iterator_move/2,
-         iterator_close/1]).
-
--export_type([db_ref/0,
-              itr_ref/0]).
-
--on_load(init/0).
-
--ifdef(TEST).
--compile(export_all).
--ifdef(EQC).
--include_lib("eqc/include/eqc.hrl").
--define(QC_OUT(P),
-        eqc:on_output(fun(Str, Args) -> io:format(user, Str, Args) end, P)).
--endif.
--include_lib("eunit/include/eunit.hrl").
--endif.
-
-%% This cannot be a separate function. Code must be inline to trigger
-%% Erlang compiler's use of optimized selective receive.
--define(WAIT_FOR_REPLY(Ref),
-        receive {Ref, Reply} ->
-                Reply
-        end).
-
--spec init() -> ok | {error, any()}.
-init() ->
-%%    NumWriteThreads = case os:getenv("ELEVELDB_N_WRITE_THREADS") of
-%%                        false -> 71;                     % must be a prime number
-%%                        N -> erlang:list_to_integer(N)   % exception on bad value
-%%                      end,
-    SoName = case code:priv_dir(?MODULE) of
-                 {error, bad_name} ->
-                     case code:which(?MODULE) of
-                         Filename when is_list(Filename) ->
-                             filename:join([filename:dirname(Filename),"../priv", "eleveldb"]);
-                         _ ->
-                             filename:join("../priv", "eleveldb")
-                     end;
-                 Dir ->
-                     filename:join(Dir, "eleveldb")
-             end,
-    erlang:load_nif(SoName, application:get_all_env(eleveldb)).
-
--type open_options() :: [{create_if_missing, boolean()} |
-                         {error_if_exists, boolean()} |
-                         {write_buffer_size, pos_integer()} |
-                         {max_open_files, pos_integer()} |
-                         {block_size, pos_integer()} |                  %% DEPRECATED
-                         {sst_block_size, pos_integer()} |
-                         {block_restart_interval, pos_integer()} |
-                         {cache_size, pos_integer()} |
-                         {paranoid_checks, boolean()} |
-                         {verify_compactions, boolean()} |
-                         {compression, boolean()} |
-                         {use_bloomfilter, boolean() | pos_integer()} |
-                         {is_internal_db, boolean()} |
-                         {fadvise_willneed, boolean()} |
-                         {write_threads, pos_integer()}].
-
+-export([open/3, open_with_cf/3, close/1]).
+-export([list_column_families/2, create_column_family/3, drop_column_family/2]).
+-export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
+-export([iterator/2, iterator/3, iterator_move/2, iterator_close/1]).
+-export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
+-export([destroy/2, repair/2]).
+-export([count/1, count/2, status/1, status/2]).
+ 
+-export_type([db_handle/0,
+              cf_handle/0,
+              itr_handle/0,
+              compression_type/0,
+              compaction_style/0,
+              access_hint/0]).
+ 
+-record(db_path, {path        :: file:filename_all(),
+                  target_size :: non_neg_integer()}).
+ 
+-record(cf_descriptor, {name    :: string(),
+                        options :: cf_options()}).
+ 
+-type compression_type() :: snappy | zlib | bzip2 | lz4 | lz4h | none.
+-type compaction_style() :: level | universal | fifo | none.
+-type access_hint() :: normal | sequential | willneed | none.
+ 
+-opaque db_handle() :: binary().
+-opaque cf_handle() :: binary().
+-opaque itr_handle() :: binary().
+ 
+-type cf_options() :: [{block_cache_size_mb_for_point_lookup, non_neg_integer()} |
+                       {memtable_memory_budget, pos_integer()} |
+                       {write_buffer_size,  pos_integer()} |
+                       {max_write_buffer_number,  pos_integer()} |
+                       {min_write_buffer_number_to_merge,  pos_integer()} |
+                       {compression,  compression_type()} |
+                       {num_levels,  pos_integer()} |
+                       {level0_file_num_compaction_trigger,  integer()} |
+                       {level0_slowdown_writes_trigger,  integer()} |
+                       {level0_stop_writes_trigger,  integer()} |
+                       {max_mem_compaction_level,  pos_integer()} |
+                       {target_file_size_base,  pos_integer()} |
+                       {target_file_size_multiplier,  pos_integer()} |
+                       {max_bytes_for_level_base,  pos_integer()} |
+                       {max_bytes_for_level_multiplier,  pos_integer()} |
+                       {expanded_compaction_factor,  pos_integer()} |
+                       {source_compaction_factor,  pos_integer()} |
+                       {max_grandparent_overlap_factor,  pos_integer()} |
+                       {soft_rate_limit,  float()} |
+                       {hard_rate_limit,  float()} |
+                       {arena_block_size,  integer()} |
+                       {disable_auto_compactions,  boolean()} |
+                       {purge_redundant_kvs_while_flush,  boolean()} |
+                       {compaction_style,  compaction_style()} |
+                       {verify_checksums_in_compaction,  boolean()} |
+                       {filter_deletes,  boolean()} |
+                       {max_sequential_skip_in_iterations,  pos_integer()} |
+                       {inplace_update_support,  boolean()} |
+                       {inplace_update_num_locks,  pos_integer()}].
+                       
+-type db_options() :: [{total_threads, pos_integer()} |
+                       {create_if_missing, boolean()} |
+                       {create_missing_column_families, boolean()} |
+                       {error_if_exists, boolean()} |
+                       {paranoid_checks, boolean()} |
+                       {max_open_files, integer()} |
+                       {max_total_wal_size, non_neg_integer()} |
+                       {disable_data_sync, boolean()} |
+                       {use_fsync, boolean()} |
+                       {db_paths, list(#db_path{})} |
+                       {db_log_dir, file:filename_all()} |
+                       {wal_dir, file:filename_all()} |
+                       {delete_obsolete_files_period_micros, pos_integer()} |
+                       {max_background_compactions, pos_integer()} |
+                       {max_background_flushes, pos_integer()} |
+                       {max_log_file_size, non_neg_integer()} |
+                       {log_file_time_to_roll, non_neg_integer()} |
+                       {keep_log_file_num, pos_integer()} |
+                       {max_manifest_file_size, pos_integer()} |
+                       {table_cache_numshardbits, pos_integer()} |
+                       {wal_ttl_seconds, non_neg_integer()} |
+                       {wal_size_limit_mb, non_neg_integer()} |
+                       {manifest_preallocation_size, pos_integer()} |
+                       {allow_os_buffer, boolean()} |
+                       {allow_mmap_reads, boolean()} |
+                       {allow_mmap_writes, boolean()} |
+                       {is_fd_close_on_exec, boolean()} |
+                       {skip_log_error_on_recovery, boolean()} |
+                       {stats_dump_period_sec, non_neg_integer()} |
+                       {advise_random_on_open, boolean()} |
+                       {access_hint, access_hint()} |
+                       {use_adaptive_mutex, boolean()} |
+                       {bytes_per_sync, non_neg_integer()}].
+ 
 -type read_options() :: [{verify_checksums, boolean()} |
-                         {fill_cache, boolean()}].
-
--type write_options() :: [{sync, boolean()}].
-
+                         {fill_cache, boolean()} |
+                         {iterate_upper_bound, binary()} |
+                         {tailing, boolean()} |
+                         {total_order_seek, boolean()}].
+ 
+-type write_options() :: [{sync, boolean()} |
+                          {disable_wal, boolean()} |
+                          {timeout_hint_us, non_neg_integer()} |
+                          {ignore_missing_column_families, boolean()}].
+ 
 -type write_actions() :: [{put, Key::binary(), Value::binary()} |
+                          {put, ColumnFamilyHandle::cf_handle(), Key::binary(), Value::binary()} |
                           {delete, Key::binary()} |
-                          clear].
-
--type iterator_action() :: first | last | next | prev | prefetch | binary().
-
--opaque db_ref() :: binary().
-
--opaque itr_ref() :: binary().
-
--spec async_open(reference(), string(), open_options()) -> {ok, db_ref()} | {error, any()}.
-async_open(_CallerRef, _Name, _Opts) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec open(string(), open_options()) -> {ok, db_ref()} | {error, any()}.
-open(Name, Opts) ->
-    CallerRef = make_ref(),
-    async_open(CallerRef, Name, Opts),
-    ?WAIT_FOR_REPLY(CallerRef).
-
--spec close(db_ref()) -> ok | {error, any()}.
-close(Ref) ->
-    eleveldb_bump:big(),
-    close_int(Ref).
-
-close_int(_Ref) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec async_get(reference(), db_ref(), binary(), read_options()) -> ok.
-async_get(_CallerRef, _Dbh, _Key, _Opts) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec get(db_ref(), binary(), read_options()) -> {ok, binary()} | not_found | {error, any()}.
-get(Dbh, Key, Opts) ->
-    CallerRef = make_ref(),
-    async_get(CallerRef, Dbh, Key, Opts),
-    ?WAIT_FOR_REPLY(CallerRef).
-
--spec put(db_ref(), binary(), binary(), write_options()) -> ok | {error, any()}.
-put(Ref, Key, Value, Opts) -> write(Ref, [{put, Key, Value}], Opts).
-
--spec delete(db_ref(), binary(), write_options()) -> ok | {error, any()}.
-delete(Ref, Key, Opts) -> write(Ref, [{delete, Key}], Opts).
-
--spec write(db_ref(), write_actions(), write_options()) -> ok | {error, any()}.
-write(Ref, Updates, Opts) ->
-    CallerRef = make_ref(),
-    async_write(CallerRef, Ref, Updates, Opts),
-    ?WAIT_FOR_REPLY(CallerRef).
-
--spec async_write(reference(), db_ref(), write_actions(), write_options()) -> ok | {error, any()}.
-async_write(_CallerRef, _Ref, _Updates, _Opts) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec async_iterator(reference(), db_ref(), read_options()) -> {_CallerRef, ok, itr_ref()}.
--spec async_iterator(reference(), db_ref(), read_options(), keys_only) -> {_CallerRef, ok, itr_ref()}.
-async_iterator(_CallerRef, _Ref, _Opts) ->
-    erlang:nif_error({error, not_loaded}).
-
-async_iterator(_CallerRef, _Ref, _Opts, keys_only) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec iterator(db_ref(), read_options()) -> {ok, itr_ref()}.
-iterator(Ref, Opts) ->
-    CallerRef = make_ref(),
-    async_iterator(CallerRef, Ref, Opts),
-    ?WAIT_FOR_REPLY(CallerRef).
-
--spec iterator(db_ref(), read_options(), keys_only) -> {ok, itr_ref()}.
-iterator(Ref, Opts, keys_only) ->
-    CallerRef = make_ref(),
-    async_iterator(CallerRef, Ref, Opts, keys_only),
-    ?WAIT_FOR_REPLY(CallerRef).
-
--spec async_iterator_move(reference(), itr_ref(), iterator_action()) -> {reference(), {ok, Key::binary(), Value::binary()}} |
-                                                                        {reference(), {ok, Key::binary()}} |
-                                                                        {reference(), {error, invalid_iterator}} |
-                                                                        {reference(), {error, iterator_closed}}.
-async_iterator_move(_CallerRef, _IterRef, _IterAction) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec iterator_move(itr_ref(), iterator_action()) -> {ok, Key::binary(), Value::binary()} |
-                                                     {ok, Key::binary()} |
-                                                     {error, invalid_iterator} |
-                                                     {error, iterator_closed}.
-iterator_move(_IRef, _Loc) ->
-    case async_iterator_move(undefined, _IRef, _Loc) of
-    Ref when is_reference(Ref) ->
-        receive
-            {Ref, X}                    -> X
-        end;
-    {ok, _}=Key -> Key;
-    {ok, _, _}=KeyVal -> KeyVal;
-    ER -> ER
-    end.
-
--spec iterator_close(itr_ref()) -> ok.
-iterator_close(IRef) ->
-    eleveldb_bump:small(),
-    iterator_close_int(IRef).
-
-iterator_close_int(_IRef) ->
-    erlang:nif_error({error, not_loaded}).
-
+                          {delete, ColumnFamilyHandle::cf_handle(), Key::binary()} |
+                           clear].
+ 
+-type iterator_action() :: first | last | next | prev | binary().
+ 
+%% @doc
+%% Open RocksDB with the defalut column family
+-spec(open(Name, DBOpts, CFOpts) -> 
+              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
+                                                      DBOpts::db_options(),
+                                                      CFOpts::cf_options()).
+open(Name, DBOpts, CFOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Open RocksDB with the specified column families
+-spec(open_with_cf(Name, DBOpts, CFDescriptors) -> 
+              {ok, db_handle(), list(cf_handle())} | {error, any()} 
+                                    when Name::file:filename_all(),
+                                         DBOpts :: db_options(),
+                                         CFDescriptors :: list(#cf_descriptor{})).
+open_with_cf(Name, DBOpts, CFDescriptors) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Close RocksDB
+-spec(close(DBHandle) -> 
+              ok | {error, any()} when DBHandle::db_handle()).
+close(DBHandle) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% List column families
+-spec(list_column_families(Name, DBOpts) -> 
+              {ok, list(string())} | {error, any()} when Name::file:filename_all(),
+                                                         DBOpts::db_options()).
+list_column_families(Name, DBOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Create a new column family
+-spec(create_column_family(DBHandle, Name, CFOpts) -> 
+              {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                      Name::string(),
+                                                      CFOpts::cf_options()).
+create_column_family(DBHandle, Name, CFOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Drop a column family
+-spec(drop_column_family(DBHandle, CFHandle) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       CFHandle::cf_handle()).
+drop_column_family(DBHandle, CFHandle) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Put a key/value pair into the default column family 
+-spec(put(DBHandle, Key, Value, WriteOpts) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       Key::binary(),
+                                       Value::binary(),
+                                       WriteOpts::write_options()).
+put(DBHandle, Key, Value, WriteOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Put a key/value pair into the specified column family 
+-spec(put(DBHandle, CFHandle, Key, Value, WriteOpts) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       CFHandle::cf_handle(),
+                                       Key::binary(),
+                                       Value::binary(),
+                                       WriteOpts::write_options()).
+put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Delete a key/value pair in the default column family 
+-spec(delete(DBHandle, Key, WriteOpts) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       Key::binary(),
+                                       WriteOpts::write_options()).
+delete(DBHandle, Key, WriteOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Delete a key/value pair in the specified column family 
+-spec(delete(DBHandle, CFHandle, Key, WriteOpts) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       CFHandle::cf_handle(),
+                                       Key::binary(),
+                                       WriteOpts::write_options()).
+delete(DBHandle, CFHandle, Key, WriteOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Apply the specified updates to the database.
+-spec(write(DBHandle, WriteActions, WriteOpts) -> 
+              ok | {error, any()} when DBHandle::db_handle(),
+                                       WriteActions::write_actions(),
+                                       WriteOpts::write_options()).
+write(DBHandle, WriteActions, WriteOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Retrieve a key/value pair in the default column family 
+-spec(get(DBHandle, Key, ReadOpts) -> 
+              {ok, binary()} | {error, any()} when DBHandle::db_handle(),
+                                                   Key::binary(),
+                                                   ReadOpts::read_options()).
+get(DBHandle, Key, ReadOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Retrieve a key/value pair in the specified column family 
+-spec(get(DBHandle, CFHandle, Key, ReadOpts) -> 
+              {ok, binary()} | {error, any()} when DBHandle::db_handle(),
+                                                   CFHandle::cf_handle(),
+                                                   Key::binary(),
+                                                   ReadOpts::read_options()).
+get(DBHandle, CFHandle, Key, ReadOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return a iterator over the contents of the database.
+%% The result of iterator() is initially invalid (caller must
+%% call iterator_move function on the iterator before using it).
+-spec(iterator(DBHandle, ReadOpts) -> 
+              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                       ReadOpts::read_options()).
+iterator(DBHandle, ReadOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return a iterator over the contents of the specified column family.
+-spec(iterator(DBHandle, CFHandle, ReadOpts) -> 
+              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                       CFHandle::cf_handle(),
+                                                       ReadOpts::read_options()).
+iterator(DBHandle, CFHandle, ReadOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Move to the specified place 
+-spec(iterator_move(ITRHandle, ITRAction) -> 
+              {ok, Key::binary(), Value::binary()} | 
+              {ok, Key::binary()} | 
+              {error, invalid_iterator} | 
+              {error, iterator_closed} when ITRHandle::itr_handle(),
+                                            ITRAction::iterator_action()).
+iterator_move(ITRHandle, ITRAction) ->
+    {error, invalid_iterator}.
+ 
+%% @doc
+%% Close a iterator
+-spec(iterator_close(ITRHandle) -> 
+              ok when ITRHandle::itr_handle()).
+iterator_close(ITRHandle) ->
+    ok.
+ 
 -type fold_fun() :: fun(({Key::binary(), Value::binary()}, any()) -> any()).
-
-%% Fold over the keys and values in the database
-%% will throw an exception if the database is closed while the fold runs
--spec fold(db_ref(), fold_fun(), any(), read_options()) -> any().
-fold(Ref, Fun, Acc0, Opts) ->
-    {ok, Itr} = iterator(Ref, Opts),
-    do_fold(Itr, Fun, Acc0, Opts).
-
+ 
+%% @doc
+%% Calls Fun(Elem, AccIn) on successive elements in the default column family
+%% starting with AccIn == Acc0. 
+%% Fun/2 must return a new accumulator which is passed to the next call. 
+%% The function returns the final value of the accumulator. 
+%% Acc0 is returned if the default column family is empty.
+-spec(fold(DBHandle, Fun, Acc0, ReadOpts) -> 
+              any() when DBHandle::db_handle(),
+                         Fun::fold_fun(),
+                         Acc0::any(),
+                         ReadOpts::read_options()).
+fold(DBHandle, Fun, Acc0, ReadOpts) ->
+    Acc0.
+ 
+%% @doc
+%% Calls Fun(Elem, AccIn) on successive elements in the specified column family
+%% Other specs are same with fold/4
+-spec(fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) -> 
+              any() when DBHandle::db_handle(),
+                         CFHandle::cf_handle(),
+                         Fun::fold_fun(),
+                         Acc0::any(),
+                         ReadOpts::read_options()).
+fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
+    Acc0.
+ 
 -type fold_keys_fun() :: fun((Key::binary(), any()) -> any()).
-
-%% Fold over the keys in the database
-%% will throw an exception if the database is closed while the fold runs
--spec fold_keys(db_ref(), fold_keys_fun(), any(), read_options()) -> any().
-fold_keys(Ref, Fun, Acc0, Opts) ->
-    {ok, Itr} = iterator(Ref, Opts, keys_only),
-    do_fold(Itr, Fun, Acc0, Opts).
-
--spec status(db_ref(), Key::binary()) -> {ok, binary()} | error.
-status(Ref, Key) ->
-    eleveldb_bump:small(),
-    status_int(Ref, Key).
-
-status_int(_Ref, _Key) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec destroy(string(), open_options()) -> ok | {error, any()}.
-destroy(Name, Opts) ->
-    eleveldb_bump:big(),
-    destroy_int(Name, Opts).
-
-destroy_int(_Name, _Opts) ->
-    erlang:nif_error({erlang, not_loaded}).
-
-repair(Name, Opts) ->
-    eleveldb_bump:big(),
-    repair_int(Name, Opts).
-
-repair_int(_Name, _Opts) ->
-    erlang:nif_error({erlang, not_loaded}).
-
--spec is_empty(db_ref()) -> boolean().
-is_empty(Ref) ->
-    eleveldb_bump:big(),
-    is_empty_int(Ref).
-
-is_empty_int(_Ref) ->
-    erlang:nif_error({error, not_loaded}).
-
--spec option_types(open | read | write) -> [{atom(), bool | integer | any}].
-option_types(open) ->
-    [{create_if_missing, bool},
-     {error_if_exists, bool},
-     {write_buffer_size, integer},
-     {max_open_files, integer},
-     {block_size, integer},                            %% DEPRECATED
-     {sst_block_size, integer},
-     {block_restart_interval, integer},
-     {cache_size, integer},
-     {paranoid_checks, bool},
-     {verify_compactions, bool},
-     {compression, bool},
-     {use_bloomfilter, any},
-     {is_internal_db, bool},
-     {write_threads, integer}];
-option_types(read) ->
-    [{verify_checksums, bool},
-     {fill_cache, bool}];
-option_types(write) ->
-     [{sync, bool}].
-
--spec validate_options(open | read | write, [{atom(), any()}]) ->
-                              {[{atom(), any()}], [{atom(), any()}]}.
-validate_options(Type, Opts) ->
-    Types = option_types(Type),
-    lists:partition(fun({K, V}) ->
-                            KType = lists:keyfind(K, 1, Types),
-                            validate_type(KType, V)
-                    end, Opts).
-
-
-
-%% ===================================================================
-%% Internal functions
-%% ===================================================================
-do_fold(Itr, Fun, Acc0, Opts) ->
-    try
-        %% Extract {first_key, binary()} and seek to that key as a starting
-        %% point for the iteration. The folding function should use throw if it
-        %% wishes to terminate before the end of the fold.
-        Start = proplists:get_value(first_key, Opts, first),
-        true = is_binary(Start) or (Start == first),
-        fold_loop(iterator_move(Itr, Start), Itr, Fun, Acc0)
-    after
-        iterator_close(Itr)
-    end.
-
-fold_loop({error, iterator_closed}, _Itr, _Fun, Acc0) ->
-    throw({iterator_closed, Acc0});
-fold_loop({error, invalid_iterator}, _Itr, _Fun, Acc0) ->
-    Acc0;
-fold_loop({ok, K}, Itr, Fun, Acc0) ->
-    Acc = Fun(K, Acc0),
-    fold_loop(iterator_move(Itr, prefetch), Itr, Fun, Acc);
-fold_loop({ok, K, V}, Itr, Fun, Acc0) ->
-    Acc = Fun({K, V}, Acc0),
-    fold_loop(iterator_move(Itr, prefetch), Itr, Fun, Acc).
-
-validate_type({_Key, bool}, true)                            -> true;
-validate_type({_Key, bool}, false)                           -> true;
-validate_type({_Key, integer}, Value) when is_integer(Value) -> true;
-validate_type({_Key, any}, _Value)                           -> true;
-validate_type(_, _)                                          -> false.
-
+ 
+%% @doc
+%% Calls Fun(Elem, AccIn) on successive elements in the default column family
+%% starting with AccIn == Acc0. 
+%% Fun/2 must return a new accumulator which is passed to the next call. 
+%% The function returns the final value of the accumulator. 
+%% Acc0 is returned if the default column family is empty.
+-spec(fold_keys(DBHandle, Fun, Acc0, ReadOpts) -> 
+              any() when DBHandle::db_handle(),
+                         Fun::fold_keys_fun(),
+                         Acc0::any(),
+                         ReadOpts::read_options()).
+fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
+    Acc0.
+ 
+%% @doc
+%% Calls Fun(Elem, AccIn) on successive elements in the specified column family
+%% Other specs are same with fold_keys/4
+-spec(fold_keys(DBHandle, CFHandle, Fun, Acc0, ReadOpts) -> 
+              any() when DBHandle::db_handle(),
+                         CFHandle::cf_handle(),
+                         Fun::fold_keys_fun(),
+                         Acc0::any(),
+                         ReadOpts::read_options()).
+fold_keys(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
+    Acc0.
+ 
+%% @doc
+%% Destroy the contents of the specified database.
+%% Be very careful using this method.
+-spec(destroy(Name, DBOpts) -> 
+              ok | {error, any()} when Name::file:filename_all(),
+                                       DBOpts::db_options()).
+destroy(Name, DBOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Try to repair as much of the contents of the database as possible.
+%% Some data may be lost, so be careful when calling this function
+-spec(repair(Name, DBOpts) -> 
+              ok | {error, any()} when Name::file:filename_all(),
+                                       DBOpts::db_options()).
+repair(Name, DBOpts) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return the approximate number of keys in the default column family.
+%% Implemented by calling GetIntProperty with "rocksdb.estimate-num-keys"
+%%
+-spec(count(DBHandle) -> 
+              non_neg_integer() | {error, any()} when DBHandle::db_handle()).
+count(DBHandle) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return the approximate number of keys in the specified column family.
+%%
+-spec(count(DBHandle, CFHandle) -> 
+              non_neg_integer() | {error, any()} when DBHandle::db_handle(),
+                                                      CFHandle::cf_handle()).
+count(DBHandle, CFHandle) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return the current status of the default column family as a string representation.
+%% Implemented by calling GetProperty with "rocksdb.stats"
+%%
+-spec(status(DBHandle) -> 
+              string() | {error, any()} when DBHandle::db_handle()).
+status(DBHandle) ->
+    {error, not_implemeted}.
+ 
+%% @doc
+%% Return the current status of the specified column family as a string representation.
+%%
+-spec(status(DBHandle, CFHandle) -> 
+              string() | {error, any()} when DBHandle::db_handle(),
+                                             CFHandle::cf_handle()).
+status(DBHandle, CFHandle) ->
+    {error, not_implemeted}.
 
 %% ===================================================================
 %% EUnit tests
@@ -330,16 +409,16 @@ validate_type(_, _)                                          -> false.
 
 open_test() -> [{open_test_Z(), l} || l <- lists:seq(1, 20)].
 open_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.open.test"),
-    {ok, Ref} = open("/tmp/eleveldb.open.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.open.test"),
+    {ok, Ref} = open("/tmp/erocksdb.open.test", [{create_if_missing, true}]),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     {ok, <<"123">>} = ?MODULE:get(Ref, <<"abc">>, []),
     not_found = ?MODULE:get(Ref, <<"def">>, []).
 
 fold_test() -> [{fold_test_Z(), l} || l <- lists:seq(1, 20)].
 fold_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.fold.test"),
-    {ok, Ref} = open("/tmp/eleveldb.fold.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.fold.test"),
+    {ok, Ref} = open("/tmp/erocksdb.fold.test", [{create_if_missing, true}]),
     ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
@@ -350,8 +429,8 @@ fold_test_Z() ->
 
 fold_keys_test() -> [{fold_keys_test_Z(), l} || l <- lists:seq(1, 20)].
 fold_keys_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.fold.keys.test"),
-    {ok, Ref} = open("/tmp/eleveldb.fold.keys.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.fold.keys.test"),
+    {ok, Ref} = open("/tmp/erocksdb.fold.keys.test", [{create_if_missing, true}]),
     ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
@@ -361,8 +440,8 @@ fold_keys_test_Z() ->
 
 fold_from_key_test() -> [{fold_from_key_test_Z(), l} || l <- lists:seq(1, 20)].
 fold_from_key_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.fold.fromkeys.test"),
-    {ok, Ref} = open("/tmp/eleveldb.fromfold.keys.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.fold.fromkeys.test"),
+    {ok, Ref} = open("/tmp/erocksdb.fromfold.keys.test", [{create_if_missing, true}]),
     ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
@@ -372,24 +451,24 @@ fold_from_key_test_Z() ->
 
 destroy_test() -> [{destroy_test_Z(), l} || l <- lists:seq(1, 20)].
 destroy_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.destroy.test"),
-    {ok, Ref} = open("/tmp/eleveldb.destroy.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.destroy.test"),
+    {ok, Ref} = open("/tmp/erocksdb.destroy.test", [{create_if_missing, true}]),
     ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
     {ok, <<"456">>} = ?MODULE:get(Ref, <<"def">>, []),
     close(Ref),
-    ok = ?MODULE:destroy("/tmp/eleveldb.destroy.test", []),
-    {error, {db_open, _}} = open("/tmp/eleveldb.destroy.test", [{error_if_exists, true}]).
+    ok = ?MODULE:destroy("/tmp/erocksdb.destroy.test", []),
+    {error, {db_open, _}} = open("/tmp/erocksdb.destroy.test", [{error_if_exists, true}]).
 
 compression_test() -> [{compression_test_Z(), l} || l <- lists:seq(1, 20)].
 compression_test_Z() ->
     CompressibleData = list_to_binary([0 || _X <- lists:seq(1,20)]),
-    os:cmd("rm -rf /tmp/eleveldb.compress.0 /tmp/eleveldb.compress.1"),
-    {ok, Ref0} = open("/tmp/eleveldb.compress.0", [{write_buffer_size, 5},
+    os:cmd("rm -rf /tmp/erocksdb.compress.0 /tmp/erocksdb.compress.1"),
+    {ok, Ref0} = open("/tmp/erocksdb.compress.0", [{write_buffer_size, 5},
                                                    {create_if_missing, true},
                                                    {compression, false}]),
     [ok = ?MODULE:put(Ref0, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
         I <- lists:seq(1,10)],
-    {ok, Ref1} = open("/tmp/eleveldb.compress.1", [{write_buffer_size, 5},
+    {ok, Ref1} = open("/tmp/erocksdb.compress.1", [{write_buffer_size, 5},
                                                    {create_if_missing, true},
                                                    {compression, true}]),
     [ok = ?MODULE:put(Ref1, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
@@ -404,25 +483,25 @@ compression_test_Z() ->
 					nomatch -> nomatch
 				end
 		end,
-	Log0Option = MatchCompressOption("/tmp/eleveldb.compress.0/LOG", "0"),
-	Log1Option = MatchCompressOption("/tmp/eleveldb.compress.1/LOG", "1"),
+	Log0Option = MatchCompressOption("/tmp/erocksdb.compress.0/LOG", "0"),
+	Log1Option = MatchCompressOption("/tmp/erocksdb.compress.1/LOG", "1"),
 	?assert(Log0Option =:= match andalso Log1Option =:= match).
 
 
 close_test() -> [{close_test_Z(), l} || l <- lists:seq(1, 20)].
 close_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.close.test"),
-    {ok, Ref} = open("/tmp/eleveldb.close.test", [{create_if_missing, true}]),
+    os:cmd("rm -rf /tmp/erocksdb.close.test"),
+    {ok, Ref} = open("/tmp/erocksdb.close.test", [{create_if_missing, true}]),
     ?assertEqual(ok, close(Ref)),
     ?assertEqual({error, einval}, close(Ref)).
 
 close_fold_test() -> [{close_fold_test_Z(), l} || l <- lists:seq(1, 20)].
 close_fold_test_Z() ->
-    os:cmd("rm -rf /tmp/eleveldb.close_fold.test"),
-    {ok, Ref} = open("/tmp/eleveldb.close_fold.test", [{create_if_missing, true}]),
-    ok = eleveldb:put(Ref, <<"k">>,<<"v">>,[]),
+    os:cmd("rm -rf /tmp/erocksdb.close_fold.test"),
+    {ok, Ref} = open("/tmp/erocksdb.close_fold.test", [{create_if_missing, true}]),
+    ok = erocksdb:put(Ref, <<"k">>,<<"v">>,[]),
     ?assertException(throw, {iterator_closed, ok}, % ok is returned by close as the acc
-                     eleveldb:fold(Ref, fun(_,_A) -> eleveldb:close(Ref) end, undefined, [])).
+                     erocksdb:fold(Ref, fun(_,_A) -> erocksdb:close(Ref) end, undefined, [])).
 
 -ifdef(EQC).
 
@@ -441,26 +520,26 @@ ops(Keys, Values) ->
 apply_kv_ops([], _Ref, Acc0) ->
     Acc0;
 apply_kv_ops([{put, K, V} | Rest], Ref, Acc0) ->
-    ok = eleveldb:put(Ref, K, V, []),
+    ok = erocksdb:put(Ref, K, V, []),
     apply_kv_ops(Rest, Ref, orddict:store(K, V, Acc0));
 apply_kv_ops([{delete, K, _} | Rest], Ref, Acc0) ->
-    ok = eleveldb:delete(Ref, K, []),
+    ok = erocksdb:delete(Ref, K, []),
     apply_kv_ops(Rest, Ref, orddict:store(K, deleted, Acc0)).
 
 prop_put_delete() ->
     ?LET({Keys, Values}, {keys(), values()},
          ?FORALL(Ops, eqc_gen:non_empty(list(ops(Keys, Values))),
                  begin
-                     ?cmd("rm -rf /tmp/eleveldb.putdelete.qc"),
-                     {ok, Ref} = eleveldb:open("/tmp/eleveldb.putdelete.qc",
+                     ?cmd("rm -rf /tmp/erocksdb.putdelete.qc"),
+                     {ok, Ref} = erocksdb:open("/tmp/erocksdb.putdelete.qc",
                                                 [{create_if_missing, true}]),
                      Model = apply_kv_ops(Ops, Ref, []),
 
                      %% Valdiate that all deleted values return not_found
                      F = fun({K, deleted}) ->
-                                 ?assertEqual(not_found, eleveldb:get(Ref, K, []));
+                                 ?assertEqual(not_found, erocksdb:get(Ref, K, []));
                             ({K, V}) ->
-                                 ?assertEqual({ok, V}, eleveldb:get(Ref, K, []))
+                                 ?assertEqual({ok, V}, erocksdb:get(Ref, K, []))
                          end,
                      lists:map(F, Model),
 
@@ -469,7 +548,7 @@ prop_put_delete() ->
                                                  [], [])),
                      ?assertEqual([{K, V} || {K, V} <- Model, V /= deleted],
                                   Actual),
-                     ok = eleveldb:close(Ref),
+                     ok = erocksdb:close(Ref),
                      true
                  end)).
 

@@ -25,13 +25,13 @@
  #define __WORK_RESULT_HPP 1
 
 #include "erl_nif.h"
-#include "leveldb/status.h"
+#include "rocksdb/status.h"
 
 #ifndef ATOMS_H
     #include "atoms.h"
 #endif
 
-namespace basho { namespace async_nif {
+namespace leofs { namespace async_nif {
 
 /* Type returned from functors (needs to be fleshed out a bit...): */
 class work_result
@@ -62,12 +62,12 @@ class work_result
     _result = enif_make_tuple2(env, p0, p1);
  }
 
-work_result(ErlNifEnv *env, const ERL_NIF_TERM& error, leveldb::Status& status)
+work_result(ErlNifEnv *env, const ERL_NIF_TERM& error, rocksdb::Status& status)
   : _is_set(true)
  {
     ERL_NIF_TERM reason = enif_make_string(env, status.ToString().c_str(),
                                            ERL_NIF_LATIN1);
-    _result = enif_make_tuple2(env, eleveldb::ATOM_ERROR,
+    _result = enif_make_tuple2(env, erocksdb::ATOM_ERROR,
                             enif_make_tuple2(env, error, reason));
  }
 

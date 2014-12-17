@@ -187,8 +187,8 @@ protected:
     static ErlNifResourceType* m_Db_RESOURCE;
 
 public:
-    DbObject(rocksdb::DB * DbPtr, rocksdb::DBOptions * DBOptions,
-                                  rocksdb::CFOptions * CFOptions); // Open with default CF
+    DbObject(rocksdb::DB * DbPtr, rocksdb::DBOptions * DbOptions,
+                                  rocksdb::CFOptions * CfOptions); // Open with default CF
 
     virtual ~DbObject();
 
@@ -201,7 +201,8 @@ public:
 
     static void CreateDbObjectType(ErlNifEnv * Env);
 
-    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::Options * DbOptions);
+    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::DBOptions* DbOptions,
+                                                       rocksdb::CFOptions* CfOptions);
 
     static DbObject * RetrieveDbObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm);
 

@@ -19,7 +19,7 @@
 // under the License.
 //
 // -------------------------------------------------------------------
-#ifndef __ELEVELDB_DETAIL_HPP
+#ifndef __EROCKSDB_DETAIL_HPP
     #include "detail.hpp"
 #endif
 
@@ -31,11 +31,11 @@
     #include "workitems.h"
 #endif
 
-#include "leveldb/cache.h"
-#include "leveldb/filter_policy.h"
+#include "rocksdb/cache.h"
+#include "rocksdb/filter_policy.h"
 
 
-namespace eleveldb {
+namespace erocksdb {
 
 /**
  * RefObject Functions
@@ -44,13 +44,11 @@ namespace eleveldb {
 RefObject::RefObject()
     : m_RefCount(0)
 {
-        leveldb::gPerfCounters->Inc(leveldb::ePerfElevelRefCreate);
 }   // RefObject::RefObject
 
 
 RefObject::~RefObject()
 {
-    leveldb::gPerfCounters->Inc(leveldb::ePerfElevelRefDelete);
 }   // RefObject::~RefObject
 
 
@@ -58,7 +56,7 @@ uint32_t
 RefObject::RefInc()
 {
 
-    return(eleveldb::inc_and_fetch(&m_RefCount));
+    return(erocksdb::inc_and_fetch(&m_RefCount));
 
 }   // RefObject::RefInc
 
@@ -68,7 +66,7 @@ RefObject::RefDec()
 {
     uint32_t current_refs;
 
-    current_refs=eleveldb::dec_and_fetch(&m_RefCount);
+    current_refs=erocksdb::dec_and_fetch(&m_RefCount);
     if (0==current_refs)
         delete this;
 
@@ -171,7 +169,7 @@ ErlRefObject::RefDec()
 {
     uint32_t cur_count;
 
-    cur_count=eleveldb::dec_and_fetch(&m_RefCount);
+    cur_count=erocksdb::dec_and_fetch(&m_RefCount);
 
     // this the last active after close requested?
     //  (atomic swap should be unnecessary ... but going for safety)
@@ -200,7 +198,7 @@ DbObject::CreateDbObjectType(
 {
     ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
 
-    m_Db_RESOURCE = enif_open_resource_type(Env, NULL, "eleveldb_DbObject",
+    m_Db_RESOURCE = enif_open_resource_type(Env, NULL, "erocksdb_DbObject",
                                             &DbObject::DbObjectResourceCleanup,
                                             flags, NULL);
 
@@ -211,8 +209,9 @@ DbObject::CreateDbObjectType(
 
 DbObject *
 DbObject::CreateDbObject(
-    leveldb::DB * Db,
-    leveldb::Options * DbOptions)
+    rocksdb::DB * Db,
+    rocksdb::DBOptions * DbOptions,
+    rocksdb::CFOptions * CfOptions)
 {
     DbObject * ret_ptr;
     void * alloc_ptr;
@@ -220,7 +219,7 @@ DbObject::CreateDbObject(
     // the alloc call initializes the reference count to "one"
     alloc_ptr=enif_alloc_resource(m_Db_RESOURCE, sizeof(DbObject));
 
-    ret_ptr=new (alloc_ptr) DbObject(Db, DbOptions);
+    ret_ptr=new (alloc_ptr) DbObject(Db, DbOptions, CfOptions);
 
     // manual reference increase to keep active until "close" called
     //  only inc local counter, leave erl ref count alone ... will force
@@ -279,9 +278,10 @@ DbObject::DbObjectResourceCleanup(
 
 
 DbObject::DbObject(
-    leveldb::DB * DbPtr,
-    leveldb::Options * Options)
-    : m_Db(DbPtr), m_DbOptions(Options)
+    rocksdb::DB * DbPtr,
+    rocksdb::DBOptions * DbOptions,
+    rocksdb::CFOptions * CfOptions)
+    : m_Db(DbPtr), m_DbOptions(DbOptions), m_CFOptions(CfOptions)
 {
 }   // DbObject::DbObject
 
@@ -295,18 +295,15 @@ DbObject::~DbObject()
 
     if (NULL!=m_DbOptions)
     {
-        // Release any cache we explicitly allocated when setting up options
-        delete m_DbOptions->block_cache;
-        m_DbOptions->block_cache = NULL;
-
-        // Clean up any filter policies
-        delete m_DbOptions->filter_policy;
-        m_DbOptions->filter_policy = NULL;
-
         delete m_DbOptions;
         m_DbOptions = NULL;
     }   // if
 
+    if (NULL!=m_CfOptions)
+    {
+        delete m_CfOptions;
+        m_CfOptions = NULL;
+    }   // if
 
 
 
@@ -396,7 +393,7 @@ ItrObject::CreateItrObjectType(
 {
     ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
 
-    m_Itr_RESOURCE = enif_open_resource_type(Env, NULL, "eleveldb_ItrObject",
+    m_Itr_RESOURCE = enif_open_resource_type(Env, NULL, "erocksdb_ItrObject",
                                              &ItrObject::ItrObjectResourceCleanup,
                                              flags, NULL);
 
@@ -409,7 +406,7 @@ ItrObject *
 ItrObject::CreateItrObject(
     DbObject * DbPtr,
     bool KeysOnly,
-    leveldb::ReadOptions * Options)
+    rocksdb::ReadOptions * Options)
 {
     ItrObject * ret_ptr;
     void * alloc_ptr;
@@ -479,7 +476,7 @@ ItrObject::ItrObjectResourceCleanup(
 ItrObject::ItrObject(
     DbObject * DbPtr,
     bool KeysOnly,
-    leveldb::ReadOptions * Options)
+    rocksdb::ReadOptions * Options)
     : keys_only(KeysOnly), m_ReadOptions(Options), reuse_move(NULL), m_DbPtr(DbPtr)
 {
     if (NULL!=DbPtr)
@@ -540,6 +537,6 @@ ItrObject::ReleaseReuseMove()
 }   // ItrObject::ReleaseReuseMove()
 
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 

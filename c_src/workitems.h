@@ -25,8 +25,8 @@
 
 #include <stdint.h>
 
-#include "leveldb/db.h"
-#include "leveldb/write_batch.h"
+#include "rocksdb/db.h"
+#include "rocksdb/write_batch.h"
 
 
 #ifndef INCL_MUTEX_H
@@ -46,7 +46,7 @@
 #endif
 
 
-namespace eleveldb {
+namespace erocksdb {
 
 /* Type returned from a work task: */
 typedef basho::async_nif::work_result   work_result;
@@ -101,18 +101,21 @@ private:
 
 
 /**
- * Background object for async open of a leveldb instance
+ * Background object for async open of a rocksdb instance
  */
 
 class OpenTask : public WorkTask
 {
 protected:
     std::string         db_name;
-    leveldb::Options   *open_options;  // associated with db handle, we don't free it
+    rocksdb::DBOptions   *db_options;  // associated with db handle, we don't free it
+    rocksdb::CFOptions   *cf_options;  // associated with db handle, we don't free it
 
 public:
     OpenTask(ErlNifEnv* caller_env, ERL_NIF_TERM& _caller_ref,
-             const std::string& db_name_, leveldb::Options *open_options_);
+             const std::string& db_name_, 
+             rocksdb::DBOptions *DbOptions_,
+             rocksdb::CFOptions *CfOptions_);
 
     virtual ~OpenTask() {};
 
@@ -134,15 +137,15 @@ private:
 class WriteTask : public WorkTask
 {
 protected:
-    leveldb::WriteBatch*    batch;
-    leveldb::WriteOptions*          options;
+    rocksdb::WriteBatch*    batch;
+    rocksdb::WriteOptions*  options;
 
 public:
 
     WriteTask(ErlNifEnv* _owner_env, ERL_NIF_TERM _caller_ref,
                 DbObject * _db_handle,
-                leveldb::WriteBatch* _batch,
-                leveldb::WriteOptions* _options)
+                rocksdb::WriteBatch* _batch,
+                rocksdb::WriteOptions* _options)
         : WorkTask(_owner_env, _caller_ref, _db_handle),
        batch(_batch),
        options(_options)
@@ -156,7 +159,7 @@ public:
 
     virtual work_result operator()()
     {
-        leveldb::Status status = m_DbPtr->m_Db->Write(*options, batch);
+        rocksdb::Status status = m_DbPtr->m_Db->Write(*options, batch);
 
         return (status.ok() ? work_result(ATOM_OK) : work_result(local_env(), ATOM_ERROR_DB_WRITE, status));
     }
@@ -165,53 +168,21 @@ public:
 
 
 /**
- * Alternate object for retrieving data out of leveldb.
- *  Reduces one memcpy operation.
- */
-class BinaryValue : public leveldb::Value
-{
-private:
-    ErlNifEnv* m_env;
-    ERL_NIF_TERM& m_value_bin;
-
-    BinaryValue(const BinaryValue&);
-    void operator=(const BinaryValue&);
-
-public:
-
-    BinaryValue(ErlNifEnv* env, ERL_NIF_TERM& value_bin)
-    : m_env(env), m_value_bin(value_bin)
-    {};
-
-    virtual ~BinaryValue() {};
-
-    BinaryValue & assign(const char* data, size_t size)
-    {
-        unsigned char* v = enif_make_new_binary(m_env, size, &m_value_bin);
-        memcpy(v, data, size);
-        return *this;
-    };
-
-};
-
-
-/**
  * Background object for async get,
- *  using new BinaryValue object
  */
 
 class GetTask : public WorkTask
 {
 protected:
     std::string                        m_Key;
-    leveldb::ReadOptions*              options;
+    rocksdb::ReadOptions*              options;
 
 public:
     GetTask(ErlNifEnv *_caller_env,
             ERL_NIF_TERM _caller_ref,
             DbObject *_db_handle,
             ERL_NIF_TERM _key_term,
-            leveldb::ReadOptions *_options)
+            rocksdb::ReadOptions *_options)
         : WorkTask(_caller_env, _caller_ref, _db_handle),
         options(_options)
         {
@@ -229,10 +200,12 @@ public:
     virtual work_result operator()()
     {
         ERL_NIF_TERM value_bin;
-        BinaryValue value(local_env(), value_bin);
-        leveldb::Slice key_slice(m_Key);
+        std::string value;
+        rocksdb::Slice key_slice(m_Key);
 
-        leveldb::Status status = m_DbPtr->m_Db->Get(*options, key_slice, &value);
+        rocksdb::Status status = m_DbPtr->m_Db->Get(*options, key_slice, &value);
+        unsigned char* v = enif_make_new_binary(m_env, value.size, value_bin);
+        memcpy(v, value.data, value.size);
 
         if(!status.ok())
             return work_result(ATOM_NOT_FOUND);
@@ -253,14 +226,14 @@ class IterTask : public WorkTask
 protected:
 
     const bool keys_only;
-    leveldb::ReadOptions *options;
+    rocksdb::ReadOptions *options;
 
 public:
     IterTask(ErlNifEnv *_caller_env,
              ERL_NIF_TERM _caller_ref,
              DbObject *_db_handle,
              const bool _keys_only,
-             leveldb::ReadOptions *_options)
+             rocksdb::ReadOptions *_options)
         : WorkTask(_caller_env, _caller_ref, _db_handle),
         keys_only(_keys_only), options(_options)
     {}
@@ -274,14 +247,14 @@ public:
     virtual work_result operator()()
     {
         ItrObject * itr_ptr;
-        const leveldb::Snapshot * snapshot;
-        leveldb::Iterator * iterator;
+        const rocksdb::Snapshot * snapshot;
+        rocksdb::Iterator * iterator;
 
         // NOTE: transfering ownership of options to ItrObject
         itr_ptr=ItrObject::CreateItrObject(m_DbPtr.get(), keys_only, options);
 
         snapshot = m_DbPtr->m_Db->GetSnapshot();
-        itr_ptr->m_Snapshot.assign(new LevelSnapshotWrapper(m_DbPtr.get(), snapshot));
+        itr_ptr->m_Snapshot.assign(new RocksSnapshotWrapper(m_DbPtr.get(), snapshot));
         options->snapshot = snapshot;
 
         // Copy caller_ref to reuse in future iterator_move calls
@@ -290,7 +263,7 @@ public:
                                                       caller_ref());
 
         iterator = m_DbPtr->m_Db->NewIterator(*options);
-        itr_ptr->m_Iter.assign(new LevelIteratorWrapper(m_DbPtr.get(), itr_ptr->m_Snapshot.get(),
+        itr_ptr->m_Iter.assign(new RocksIteratorWrapper(m_DbPtr.get(), itr_ptr->m_Snapshot.get(),
                                                         iterator, keys_only));
 
         ERL_NIF_TERM result = enif_make_resource(local_env(), itr_ptr);
@@ -311,7 +284,7 @@ public:
     typedef enum { FIRST, LAST, NEXT, PREV, SEEK, PREFETCH } action_t;
 
 protected:
-    ReferencePtr<LevelIteratorWrapper> m_ItrWrap;             //!< access to database, and holds reference
+    ReferencePtr<RocksIteratorWrapper> m_ItrWrap;             //!< access to database, and holds reference
 
 public:
     action_t                                       action;
@@ -321,7 +294,7 @@ public:
 
     // No seek target:
     MoveTask(ErlNifEnv *_caller_env, ERL_NIF_TERM _caller_ref,
-             LevelIteratorWrapper * IterWrap, action_t& _action)
+             RocksIteratorWrapper * IterWrap, action_t& _action)
         : WorkTask(NULL, _caller_ref),
         m_ItrWrap(IterWrap), action(_action)
     {
@@ -332,7 +305,7 @@ public:
 
     // With seek target:
     MoveTask(ErlNifEnv *_caller_env, ERL_NIF_TERM _caller_ref,
-             LevelIteratorWrapper * IterWrap, action_t& _action,
+             RocksIteratorWrapper * IterWrap, action_t& _action,
              std::string& _seek_target)
         : WorkTask(NULL, _caller_ref),
         m_ItrWrap(IterWrap), action(_action),
@@ -353,7 +326,7 @@ public:
 
 };  // class MoveTask
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 
 #endif  // INCL_WORKITEMS_H

@@ -19,7 +19,7 @@
 // under the License.
 //
 // -------------------------------------------------------------------
-#ifndef __ELEVELDB_DETAIL_HPP
+#ifndef __EROCKSDB_DETAIL_HPP
     #include "detail.hpp"
 #endif
 
@@ -27,21 +27,20 @@
     #include "workitems.h"
 #endif
 
-#include "leveldb/cache.h"
-#include "leveldb/filter_policy.h"
-#include "leveldb/perf_count.h"
+#include "rocksdb/cache.h"
+#include "rocksdb/filter_policy.h"
 
-// error_tuple duplicated in workitems.cc and eleveldb.cc ... how to fix?
-static ERL_NIF_TERM error_tuple(ErlNifEnv* env, ERL_NIF_TERM error, leveldb::Status& status)
+// error_tuple duplicated in workitems.cc and erocksdb.cc ... how to fix?
+static ERL_NIF_TERM error_tuple(ErlNifEnv* env, ERL_NIF_TERM error, rocksdb::Status& status)
 {
     ERL_NIF_TERM reason = enif_make_string(env, status.ToString().c_str(),
                                            ERL_NIF_LATIN1);
-    return enif_make_tuple2(env, eleveldb::ATOM_ERROR,
+    return enif_make_tuple2(env, erocksdb::ATOM_ERROR,
                             enif_make_tuple2(env, error, reason));
 }
 
 
-static ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, leveldb::Slice s)
+static ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, rocksdb::Slice s)
 {
     ERL_NIF_TERM result;
     unsigned char* value = enif_make_new_binary(env, s.size(), &result);
@@ -50,7 +49,7 @@ static ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, leveldb::Slice s)
 }
 
 
-namespace eleveldb {
+namespace erocksdb {
 
 
 /**
@@ -143,9 +142,10 @@ OpenTask::OpenTask(
     ErlNifEnv* caller_env,
     ERL_NIF_TERM& _caller_ref,
     const std::string& db_name_,
-    leveldb::Options *open_options_)
+    rocksdb::DBOptions *DbOptions_,
+    rocksdb::CFOptions *CfOptions_)
     : WorkTask(caller_env, _caller_ref),
-    db_name(db_name_), open_options(open_options_)
+    db_name(db_name_), db_options(DbOptions_), cf_options(CfOptions_)
 {
 }   // OpenTask::OpenTask
 
@@ -154,14 +154,15 @@ work_result
 OpenTask::operator()()
 {
     DbObject * db_ptr;
-    leveldb::DB *db(0);
+    rocksdb::DB *db(0);
+    rocksdb::Options options(db_options, cf_options);
 
-    leveldb::Status status = leveldb::DB::Open(*open_options, db_name, &db);
+    rocksdb::Status status = rocksdb::DB::Open(*options, db_name, &db);
 
     if(!status.ok())
         return error_tuple(local_env(), ATOM_ERROR_DB_OPEN, status);
 
-    db_ptr=DbObject::CreateDbObject(db, open_options);
+    db_ptr=DbObject::CreateDbObject(db, db_options, cf_options);
 
     // create a resource reference to send erlang
     ERL_NIF_TERM result = enif_make_resource(local_env(), db_ptr);
@@ -182,7 +183,7 @@ OpenTask::operator()()
 work_result
 MoveTask::operator()()
 {
-    leveldb::Iterator* itr = m_ItrWrap->get();
+    rocksdb::Iterator* itr = m_ItrWrap->get();
 
     if(NULL == itr)
         return work_result(local_env(), ATOM_ERROR, ATOM_ITERATOR_CLOSED);
@@ -200,7 +201,7 @@ MoveTask::operator()()
 
         case SEEK:
         {
-            leveldb::Slice key_slice(seek_target);
+            rocksdb::Slice key_slice(seek_target);
 
             itr->Seek(key_slice);
             break;
@@ -303,6 +304,6 @@ MoveTask::recycle()
 
 
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 

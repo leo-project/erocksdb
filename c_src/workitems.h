@@ -108,14 +108,12 @@ class OpenTask : public WorkTask
 {
 protected:
     std::string         db_name;
-    rocksdb::DBOptions   *db_options;  // associated with db handle, we don't free it
-    rocksdb::CFOptions   *cf_options;  // associated with db handle, we don't free it
+    rocksdb::Options   *options;  // associated with db handle, we don't free it
 
 public:
     OpenTask(ErlNifEnv* caller_env, ERL_NIF_TERM& _caller_ref,
              const std::string& db_name_, 
-             rocksdb::DBOptions *DbOptions_,
-             rocksdb::CFOptions *CfOptions_);
+             rocksdb::Options *Options_);
 
     virtual ~OpenTask() {};
 

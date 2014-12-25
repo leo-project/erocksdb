@@ -67,7 +67,7 @@ static ErlNifFunc nif_funcs[] =
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
 
-    {"async_open", 3, erocksdb::async_open},
+    {"async_open", 4, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
     {"async_get", 4, erocksdb::async_get},
 
@@ -193,6 +193,12 @@ ERL_NIF_TERM ATOM_COMPRESSION_TYPE_BZIP2;
 ERL_NIF_TERM ATOM_COMPRESSION_TYPE_LZ4;
 ERL_NIF_TERM ATOM_COMPRESSION_TYPE_LZ4H;
 ERL_NIF_TERM ATOM_COMPRESSION_TYPE_NONE;
+
+// Related to Compaction Style
+ERL_NIF_TERM ATOM_COMPACTION_STYLE_LEVEL;
+ERL_NIF_TERM ATOM_COMPACTION_STYLE_UNIVERSAL;
+ERL_NIF_TERM ATOM_COMPACTION_STYLE_FIFO;
+ERL_NIF_TERM ATOM_COMPACTION_STYLE_NONE;
 
 // Related to Error Codes
 ERL_NIF_TERM ATOM_ERROR_DB_OPEN;
@@ -351,7 +357,7 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 {
                     std::string str_db_name(db_name);
                     rocksdb::DbPath db_path(str_db_name, 0);
-                    opts.push_back(db_path);
+                    opts.db_paths.push_back(db_path);
                 }
             }
         }
@@ -359,13 +365,13 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
         {
             char db_log_dir[4096];
             if (enif_get_string(env, option[1], db_log_dir, sizeof(db_log_dir), ERL_NIF_LATIN1))
-                opts.db_log_dir= std::string(db_log_dir);
+                opts.db_log_dir = std::string(db_log_dir);
         }
         else if (option[0] == erocksdb::ATOM_WAL_DIR)
         {
             char wal_dir[4096];
             if (enif_get_string(env, option[1], wal_dir, sizeof(wal_dir), ERL_NIF_LATIN1))
-                opts.wal_dir= std::string(wal_dir);
+                opts.wal_dir = std::string(wal_dir);
         }
         else if (option[0] == erocksdb::ATOM_DELETE_OBSOLETE_FILES_PERIOD_MICROS)
         {
@@ -425,7 +431,7 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
         {
             ErlNifUInt64 WAL_size_limit_MB;
             if (enif_get_uint64(env, option[1], &WAL_size_limit_MB))
-                opts.WAL_size_limit_MB= WAL_size_limit_MB;
+                opts.WAL_size_limit_MB = WAL_size_limit_MB;
         }
         else if (option[0] == erocksdb::ATOM_MANIFEST_PREALLOCATION_SIZE)
         {
@@ -465,9 +471,8 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
         }
         else if (option[0] == erocksdb::ATOM_ACCESS_HINT)
         {
-            // @TODO AccessHint
             if (option[1] == erocksdb::ATOM_ACCESS_HINT_NORMAL) {
-                opts.access_hint_on_compaction_start = rocksdb::DBOptions::AccessHint::NONE;
+                opts.access_hint_on_compaction_start = rocksdb::DBOptions::AccessHint::NORMAL;
             }
             else if (option[1] == erocksdb::ATOM_ACCESS_HINT_SEQUENTIAL) {
                 opts.access_hint_on_compaction_start = rocksdb::DBOptions::AccessHint::SEQUENTIAL;
@@ -523,7 +528,8 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             int min_write_buffer_number_to_merge;
             if (enif_get_int(env, option[1], &min_write_buffer_number_to_merge))
                 opts.min_write_buffer_number_to_merge = min_write_buffer_number_to_merge;
-        } else if (option[0] == erocksdb::ATOM_COMPRESSION)
+        }
+        else if (option[0] == erocksdb::ATOM_COMPRESSION)
         {
             if (option[1] == erocksdb::ATOM_COMPRESSION_TYPE_SNAPPY) {
                 opts.compression = rocksdb::CompressionType::kSnappyCompression;
@@ -544,6 +550,143 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 opts.compression = rocksdb::CompressionType::kNoCompression;
             }
         }
+        else if (option[0] == erocksdb::ATOM_NUM_LEVELS)
+        {
+            int num_levels;
+            if (enif_get_int(env, option[1], &num_levels))
+                opts.num_levels = num_levels;
+        }
+        else if (option[0] == erocksdb::ATOM_LEVEL0_FILE_NUM_COMPACTION_TRIGGER)
+        {
+            int level0_file_num_compaction_trigger;
+            if (enif_get_int(env, option[1], &level0_file_num_compaction_trigger))
+                opts.level0_file_num_compaction_trigger = level0_file_num_compaction_trigger;
+        }
+        else if (option[0] == erocksdb::ATOM_LEVEL0_SLOWDOWN_WRITES_TRIGGER)
+        {
+            int level0_slowdown_writes_trigger;
+            if (enif_get_int(env, option[1], &level0_slowdown_writes_trigger))
+                opts.level0_slowdown_writes_trigger = level0_slowdown_writes_trigger;
+        }
+        else if (option[0] == erocksdb::ATOM_LEVEL0_STOP_WRITES_TRIGGER)
+        {
+            int level0_stop_writes_trigger;
+            if (enif_get_int(env, option[1], &level0_stop_writes_trigger))
+                opts.level0_stop_writes_trigger = level0_stop_writes_trigger;
+        }
+        else if (option[0] == erocksdb::ATOM_MAX_MEM_COMPACTION_LEVEL)
+        {
+            int max_mem_compaction_level;
+            if (enif_get_int(env, option[1], &max_mem_compaction_level))
+                opts.max_mem_compaction_level = max_mem_compaction_level;
+        }
+        else if (option[0] == erocksdb::ATOM_TARGET_FILE_SIZE_BASE)
+        {
+            ErlNifUInt64 target_file_size_base;
+            if (enif_get_uint64(env, option[1], &target_file_size_base))
+                opts.target_file_size_base = target_file_size_base;
+        }
+        else if (option[0] == erocksdb::ATOM_TARGET_FILE_SIZE_MULTIPLIER)
+        {
+            int target_file_size_multiplier;
+            if (enif_get_int(env, option[1], &target_file_size_multiplier))
+                opts.target_file_size_multiplier = target_file_size_multiplier;
+        }
+        else if (option[0] == erocksdb::ATOM_MAX_BYTES_FOR_LEVEL_BASE)
+        {
+            ErlNifUInt64 max_bytes_for_level_base;
+            if (enif_get_uint64(env, option[1], &max_bytes_for_level_base))
+                opts.max_bytes_for_level_base = max_bytes_for_level_base;
+        }
+        else if (option[0] == erocksdb::ATOM_MAX_BYTES_FOR_LEVEL_MULTIPLIER)
+        {
+            int max_bytes_for_level_multiplier;
+            if (enif_get_int(env, option[1], &max_bytes_for_level_multiplier))
+                opts.max_bytes_for_level_multiplier = max_bytes_for_level_multiplier;
+        }
+        else if (option[0] == erocksdb::ATOM_EXPANDED_COMPACTION_FACTOR)
+        {
+            int expanded_compaction_factor;
+            if (enif_get_int(env, option[1], &expanded_compaction_factor))
+                opts.expanded_compaction_factor = expanded_compaction_factor;
+        }
+        else if (option[0] == erocksdb::ATOM_SOURCE_COMPACTION_FACTOR)
+        {
+            int source_compaction_factor;
+            if (enif_get_int(env, option[1], &source_compaction_factor))
+                opts.source_compaction_factor = source_compaction_factor;
+        }
+        else if (option[0] == erocksdb::ATOM_MAX_GRANDPARENT_OVERLAP_FACTOR)
+        {
+            int max_grandparent_overlap_factor;
+            if (enif_get_int(env, option[1], &max_grandparent_overlap_factor))
+                opts.max_grandparent_overlap_factor = max_grandparent_overlap_factor;
+        }
+        else if (option[0] == erocksdb::ATOM_SOFT_RATE_LIMIT)
+        {
+            double soft_rate_limit;
+            if (enif_get_double(env, option[1], &soft_rate_limit))
+                opts.soft_rate_limit = soft_rate_limit;
+        }
+        else if (option[0] == erocksdb::ATOM_HARD_RATE_LIMIT)
+        {
+            double hard_rate_limit;
+            if (enif_get_double(env, option[1], &hard_rate_limit))
+                opts.hard_rate_limit = hard_rate_limit;
+        }
+        else if (option[0] == erocksdb::ATOM_ARENA_BLOCK_SIZE)
+        {
+            unsigned int arena_block_size;
+            if (enif_get_uint(env, option[1], &arena_block_size))
+                opts.arena_block_size = arena_block_size;
+        }
+        else if (option[0] == erocksdb::ATOM_DISABLE_AUTO_COMPACTIONS)
+        {
+            opts.disable_auto_compactions = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_PURGE_REDUNDANT_KVS_WHILE_FLUSH)
+        {
+            opts.purge_redundant_kvs_while_flush = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_COMPACTION_STYLE)
+        {
+            if (option[1] == erocksdb::ATOM_COMPACTION_STYLE_LEVEL) {
+                opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleLevel;
+            }
+            else if (option[1] == erocksdb::ATOM_COMPACTION_STYLE_UNIVERSAL) {
+                opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleUniversal;
+            }
+            else if (option[1] == erocksdb::ATOM_COMPACTION_STYLE_FIFO) {
+                opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleFIFO;
+            }
+            else if (option[1] == erocksdb::ATOM_COMPACTION_STYLE_NONE) {
+                opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleNone;
+            }
+        }
+        else if (option[0] == erocksdb::ATOM_VERIFY_CHECKSUMS_IN_COMPACTION)
+        {
+            opts.verify_checksums_in_compaction = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_FILTER_DELETES)
+        {
+            opts.filter_deletes = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS)
+        {
+            ErlNifUInt64 max_sequential_skip_in_iterations;
+            if (enif_get_uint64(env, option[1], &max_sequential_skip_in_iterations))
+                opts.max_sequential_skip_in_iterations = max_sequential_skip_in_iterations;
+        }
+        else if (option[0] == erocksdb::ATOM_INPLACE_UPDATE_SUPPORT)
+        {
+            opts.inplace_update_support = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS)
+        {
+            unsigned int inplace_update_num_locks;
+            if (enif_get_uint(env, option[1], &inplace_update_num_locks))
+                opts.inplace_update_num_locks= inplace_update_num_locks;
+        }
     }
 }
  
@@ -557,6 +700,13 @@ ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadO
             opts.verify_checksums = (option[1] == erocksdb::ATOM_TRUE);
         else if (option[0] == erocksdb::ATOM_FILL_CACHE)
             opts.fill_cache = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_ITERATE_UPPER_BOUND)
+            // @TODO Who should be the Slice owner?
+            ;
+        else if (option[0] == erocksdb::ATOM_TAILING)
+            opts.tailing = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_TOTAL_ORDER_SEEK)
+            opts.total_order_seek = (option[1] == erocksdb::ATOM_TRUE);
     }
 
     return erocksdb::ATOM_OK;
@@ -570,6 +720,16 @@ ERL_NIF_TERM parse_write_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Writ
     {
         if (option[0] == erocksdb::ATOM_SYNC)
             opts.sync = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_DISABLE_WAL)
+            opts.disableWAL = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_TIMEOUT_HINT_US)
+        {
+            ErlNifUInt64 timeout_hint_us;
+            if (enif_get_uint64(env, option[1], &timeout_hint_us))
+                opts.timeout_hint_us = timeout_hint_us;
+        }
+        else if (option[0] == erocksdb::ATOM_IGNORE_MISSING_COLUMN_FAMILIES)
+            opts.ignore_missing_column_families = (option[1] == erocksdb::ATOM_TRUE);
     }
 
     return erocksdb::ATOM_OK;
@@ -639,7 +799,8 @@ async_open(
     char db_name[4096];
 
     if(!enif_get_string(env, argv[1], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
-       !enif_is_list(env, argv[2]))
+       !enif_is_list(env, argv[2]) ||
+       !enif_is_list(env, argv[3]))
     {
         return enif_make_badarg(env);
     }   // if
@@ -650,6 +811,7 @@ async_open(
 
     rocksdb::Options *opts = new rocksdb::Options;
     fold(env, argv[2], parse_db_option, *opts);
+    fold(env, argv[3], parse_cf_option, *opts);
 
     erocksdb::WorkTask *work_item = new erocksdb::OpenTask(env, caller_ref,
                                                               db_name, opts);
@@ -1090,10 +1252,12 @@ erocksdb_repair(
     const ERL_NIF_TERM argv[])
 {
     char name[4096];
-    if (enif_get_string(env, argv[0], name, sizeof(name), ERL_NIF_LATIN1))
+    if (enif_get_string(env, argv[0], name, sizeof(name), ERL_NIF_LATIN1) &&
+        enif_is_list(env, argv[1]))
     {
         // Parse out the options
         rocksdb::Options opts;
+        fold(env, argv[1], parse_db_option, opts);
 
         rocksdb::Status status = rocksdb::RepairDB(name, opts);
         if (!status.ok())
@@ -1247,7 +1411,7 @@ try
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS, "inplace_update_num_locks");
 
     // Related to DBOptions
-    ATOM(erocksdb::ATOM_TOTAL_THREADS, "total_threads"); // @TODO ignored now
+    ATOM(erocksdb::ATOM_TOTAL_THREADS, "total_threads");
     ATOM(erocksdb::ATOM_CREATE_IF_MISSING, "create_if_missing");
     ATOM(erocksdb::ATOM_CREATE_MISSING_COLUMN_FAMILIES, "create_missing_column_families");
     ATOM(erocksdb::ATOM_ERROR_IF_EXISTS, "error_if_exists");
@@ -1318,6 +1482,12 @@ try
     ATOM(erocksdb::ATOM_COMPRESSION_TYPE_LZ4, "lz4");
     ATOM(erocksdb::ATOM_COMPRESSION_TYPE_LZ4H, "lz4h");
     ATOM(erocksdb::ATOM_COMPRESSION_TYPE_NONE, "none");
+
+    // Related to Compaction Style
+    ATOM(erocksdb::ATOM_COMPACTION_STYLE_LEVEL, "level");
+    ATOM(erocksdb::ATOM_COMPACTION_STYLE_UNIVERSAL, "universal");
+    ATOM(erocksdb::ATOM_COMPACTION_STYLE_FIFO, "fifo");
+    ATOM(erocksdb::ATOM_COMPACTION_STYLE_NONE, "none");
 
     // Related to Error Codes
     ATOM(erocksdb::ATOM_ERROR_DB_OPEN,"db_open");

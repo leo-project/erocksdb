@@ -175,10 +175,8 @@ class DbObject : public ErlRefObject
 {
 public:
     rocksdb::DB* m_Db;                                   // NULL or rocksdb database object
-    rocksdb::ColumnFamilyHandle* m_Cf;                   // For the default CF
 
-    rocksdb::DBOptions * m_DbOptions;
-    rocksdb::ColumnFamilyOptions* m_CFOptions;           // For the default CF
+    rocksdb::Options *m_DbOptions;
 
     Mutex m_ItrMutex;                         //!< mutex protecting m_ItrList
     std::list<class ItrObject *> m_ItrList;   //!< ItrObjects holding ref count to this
@@ -187,8 +185,7 @@ protected:
     static ErlNifResourceType* m_Db_RESOURCE;
 
 public:
-    DbObject(rocksdb::DB * DbPtr, rocksdb::DBOptions * DbOptions,
-                                  rocksdb::CFOptions * CfOptions); // Open with default CF
+    DbObject(rocksdb::DB * DbPtr, rocksdb::Options * Options); // Open with default CF
 
     virtual ~DbObject();
 
@@ -201,8 +198,7 @@ public:
 
     static void CreateDbObjectType(ErlNifEnv * Env);
 
-    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::DBOptions* DbOptions,
-                                                       rocksdb::CFOptions* CfOptions);
+    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::Options* Options);
 
     static DbObject * RetrieveDbObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm);
 

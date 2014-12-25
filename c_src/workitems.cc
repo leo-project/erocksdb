@@ -142,10 +142,9 @@ OpenTask::OpenTask(
     ErlNifEnv* caller_env,
     ERL_NIF_TERM& _caller_ref,
     const std::string& db_name_,
-    rocksdb::DBOptions *DbOptions_,
-    rocksdb::CFOptions *CfOptions_)
+    rocksdb::Options *Options_)
     : WorkTask(caller_env, _caller_ref),
-    db_name(db_name_), db_options(DbOptions_), cf_options(CfOptions_)
+    db_name(db_name_), options(Options_)
 {
 }   // OpenTask::OpenTask
 
@@ -155,14 +154,13 @@ OpenTask::operator()()
 {
     DbObject * db_ptr;
     rocksdb::DB *db(0);
-    rocksdb::Options options(db_options, cf_options);
 
     rocksdb::Status status = rocksdb::DB::Open(*options, db_name, &db);
 
     if(!status.ok())
         return error_tuple(local_env(), ATOM_ERROR_DB_OPEN, status);
 
-    db_ptr=DbObject::CreateDbObject(db, db_options, cf_options);
+    db_ptr=DbObject::CreateDbObject(db, options);
 
     // create a resource reference to send erlang
     ERL_NIF_TERM result = enif_make_resource(local_env(), db_ptr);

@@ -326,7 +326,7 @@ protected:
     static ErlNifResourceType* m_Itr_RESOURCE;
 
 public:
-    ItrObject(DbObject *, bool, rocskdb::ReadOptions *);
+    ItrObject(DbObject *, bool, rocksdb::ReadOptions *);
 
     virtual ~ItrObject(); // needs to perform free_itr
 

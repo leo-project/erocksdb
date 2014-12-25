@@ -125,6 +125,9 @@ extern ERL_NIF_TERM ATOM_LAST;
 extern ERL_NIF_TERM ATOM_NEXT;
 extern ERL_NIF_TERM ATOM_PREV;
 
+// Related to Iterator Value to be retrieved
+extern ERL_NIF_TERM ATOM_KEYS_ONLY;
+
 // Related to Access Hint
 extern ERL_NIF_TERM ATOM_ACCESS_HINT_NORMAL;
 extern ERL_NIF_TERM ATOM_ACCESS_HINT_SEQUENTIAL;

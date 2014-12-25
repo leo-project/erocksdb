@@ -49,7 +49,7 @@
 namespace erocksdb {
 
 /* Type returned from a work task: */
-typedef basho::async_nif::work_result   work_result;
+typedef leofs::async_nif::work_result   work_result;
 
 
 
@@ -202,8 +202,8 @@ public:
         rocksdb::Slice key_slice(m_Key);
 
         rocksdb::Status status = m_DbPtr->m_Db->Get(*options, key_slice, &value);
-        unsigned char* v = enif_make_new_binary(m_env, value.size, value_bin);
-        memcpy(v, value.data, value.size);
+        unsigned char* v = enif_make_new_binary(local_env(), value.size(), &value_bin);
+        memcpy(v, value.c_str(), value.size());
 
         if(!status.ok())
             return work_result(ATOM_NOT_FOUND);

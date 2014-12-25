@@ -40,7 +40,6 @@
 #include "rocksdb/write_batch.h"
 #include "rocksdb/cache.h"
 #include "rocksdb/filter_policy.h"
-#include "rocksdb/perf_count.h"
 
 #ifndef INCL_THREADING_H
     #include "threading.h"
@@ -179,6 +178,9 @@ ERL_NIF_TERM ATOM_FIRST;
 ERL_NIF_TERM ATOM_LAST;
 ERL_NIF_TERM ATOM_NEXT;
 ERL_NIF_TERM ATOM_PREV;
+
+// Related to Iterator Value to be retrieved
+ERL_NIF_TERM ATOM_KEYS_ONLY;
 
 // Related to Access Hint
 ERL_NIF_TERM ATOM_ACCESS_HINT_NORMAL;
@@ -688,6 +690,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 opts.inplace_update_num_locks= inplace_update_num_locks;
         }
     }
+    return erocksdb::ATOM_OK;
 }
  
 ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadOptions& opts)
@@ -1012,7 +1015,7 @@ async_iterator_move(
         if(ATOM_LAST == action_or_target)   action = erocksdb::MoveTask::LAST;
         if(ATOM_NEXT == action_or_target)   action = erocksdb::MoveTask::NEXT;
         if(ATOM_PREV == action_or_target)   action = erocksdb::MoveTask::PREV;
-        if(ATOM_PREFETCH == action_or_target)   action = erocksdb::MoveTask::PREFETCH;
+        // if(ATOM_PREFETCH == action_or_target)   action = erocksdb::MoveTask::PREFETCH;
     }   // if
 
 
@@ -1468,6 +1471,9 @@ try
     ATOM(erocksdb::ATOM_LAST, "last");
     ATOM(erocksdb::ATOM_NEXT, "next");
     ATOM(erocksdb::ATOM_PREV, "prev");
+
+    // Related to Iterator Value to be retrieved
+    ATOM(erocksdb::ATOM_KEYS_ONLY, "keys_only");
 
     // Related to Access Hint
     ATOM(erocksdb::ATOM_ACCESS_HINT_NORMAL,"normal");

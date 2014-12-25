@@ -304,7 +304,7 @@ bool erocksdb_thread_pool::notify_caller(erocksdb::WorkTask& work_item)
 
 
     // Call the work function:
-    basho::async_nif::work_result result = work_item();
+    leofs::async_nif::work_result result = work_item();
 
     if (result.is_set())
     {

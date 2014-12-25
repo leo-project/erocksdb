@@ -279,7 +279,7 @@ DbObject::DbObjectResourceCleanup(
 DbObject::DbObject(
     rocksdb::DB * DbPtr,
     rocksdb::Options * Options)
-    : m_Db(DbPtr), m_Options(Options)
+    : m_Db(DbPtr), m_DbOptions(Options)
 {
 }   // DbObject::DbObject
 
@@ -296,15 +296,6 @@ DbObject::~DbObject()
         delete m_DbOptions;
         m_DbOptions = NULL;
     }   // if
-
-    if (NULL!=m_CfOptions)
-    {
-        delete m_CfOptions;
-        m_CfOptions = NULL;
-    }   // if
-
-
-
 
     // do not clean up m_CloseMutex and m_CloseCond
 

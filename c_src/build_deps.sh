@@ -76,8 +76,8 @@ case "$1" in
             git clone git://github.com/facebook/rocksdb
             (cd rocksdb && git checkout $ROCKSDB_VSN)
         fi
-
-        (cd rocksdb && $MAKE static_lib)
-
+        if [ ! -f rocksdb/librocksdb.a ]; then
+            (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
+        fi
         ;;
 esac

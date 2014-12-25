@@ -27,9 +27,9 @@
 -export([open/3, open_with_cf/3, close/1]).
 -export([list_column_families/2, create_column_family/3, drop_column_family/2]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
--export([iterator/2, iterator/3, iterator_move/2, iterator_close/1]).
+-export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
--export([destroy/2, repair/2]).
+-export([destroy/2, repair/2, is_empty/1]).
 -export([count/1, count/2, status/1, status/2]).
  
 -export_type([db_handle/0,
@@ -38,7 +38,41 @@
               compression_type/0,
               compaction_style/0,
               access_hint/0]).
- 
+
+-on_load(init/0).
+
+-ifdef(TEST).
+-compile(export_all).
+-ifdef(EQC).
+-include_lib("eqc/include/eqc.hrl").
+-define(QC_OUT(P),
+        eqc:on_output(fun(Str, Args) -> io:format(user, Str, Args) end, P)).
+-endif.
+-include_lib("eunit/include/eunit.hrl").
+-endif.
+
+%% This cannot be a separate function. Code must be inline to trigger
+%% Erlang compiler's use of optimized selective receive.
+-define(WAIT_FOR_REPLY(Ref),
+        receive {Ref, Reply} ->
+                Reply
+        end).
+
+-spec init() -> ok | {error, any()}.
+init() ->
+    SoName = case code:priv_dir(?MODULE) of
+                 {error, bad_name} ->
+                     case code:which(?MODULE) of
+                         Filename when is_list(Filename) ->
+                             filename:join([filename:dirname(Filename),"../priv", "erocksdb"]);
+                         _ ->
+                             filename:join("../priv", "erocksdb")
+                     end;
+                 Dir ->
+                     filename:join(Dir, "erocksdb")
+             end,
+    erlang:load_nif(SoName, application:get_all_env(erocksdb)).
+
 -record(db_path, {path        :: file:filename_all(),
                   target_size :: non_neg_integer()}).
  
@@ -135,7 +169,10 @@
                            clear].
  
 -type iterator_action() :: first | last | next | prev | binary().
- 
+
+async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
 %% @doc
 %% Open RocksDB with the defalut column family
 -spec(open(Name, DBOpts, CFOpts) -> 
@@ -143,7 +180,9 @@
                                                       DBOpts::db_options(),
                                                       CFOpts::cf_options()).
 open(Name, DBOpts, CFOpts) ->
-    {error, not_implemeted}.
+    CallerRef = make_ref(),
+    async_open(CallerRef, Name, DBOpts, CFOpts),
+    ?WAIT_FOR_REPLY(CallerRef).
  
 %% @doc
 %% Open RocksDB with the specified column families
@@ -152,22 +191,27 @@ open(Name, DBOpts, CFOpts) ->
                                     when Name::file:filename_all(),
                                          DBOpts :: db_options(),
                                          CFDescriptors :: list(#cf_descriptor{})).
-open_with_cf(Name, DBOpts, CFDescriptors) ->
+open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
     {error, not_implemeted}.
+
+async_close(_Callerfef, _DBHandle) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Close RocksDB
 -spec(close(DBHandle) -> 
               ok | {error, any()} when DBHandle::db_handle()).
 close(DBHandle) ->
-    {error, not_implemeted}.
+    CallerRef = make_ref(),
+    async_close(CallerRef, DBHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
  
 %% @doc
 %% List column families
 -spec(list_column_families(Name, DBOpts) -> 
               {ok, list(string())} | {error, any()} when Name::file:filename_all(),
                                                          DBOpts::db_options()).
-list_column_families(Name, DBOpts) ->
+list_column_families(_Name, _DBOpts) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -176,7 +220,7 @@ list_column_families(Name, DBOpts) ->
               {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
                                                       Name::string(),
                                                       CFOpts::cf_options()).
-create_column_family(DBHandle, Name, CFOpts) ->
+create_column_family(_DBHandle, _Name, _CFOpts) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -184,7 +228,7 @@ create_column_family(DBHandle, Name, CFOpts) ->
 -spec(drop_column_family(DBHandle, CFHandle) -> 
               ok | {error, any()} when DBHandle::db_handle(),
                                        CFHandle::cf_handle()).
-drop_column_family(DBHandle, CFHandle) ->
+drop_column_family(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -195,7 +239,7 @@ drop_column_family(DBHandle, CFHandle) ->
                                        Value::binary(),
                                        WriteOpts::write_options()).
 put(DBHandle, Key, Value, WriteOpts) ->
-    {error, not_implemeted}.
+    write(DBHandle, [{put, Key, Value}], WriteOpts).
  
 %% @doc
 %% Put a key/value pair into the specified column family 
@@ -205,7 +249,7 @@ put(DBHandle, Key, Value, WriteOpts) ->
                                        Key::binary(),
                                        Value::binary(),
                                        WriteOpts::write_options()).
-put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
+put(_DBHandle, _CFHandle, _Key, _Value, _WriteOpts) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -215,7 +259,7 @@ put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
                                        Key::binary(),
                                        WriteOpts::write_options()).
 delete(DBHandle, Key, WriteOpts) ->
-    {error, not_implemeted}.
+    write(DBHandle, [{delete, Key}], WriteOpts).
  
 %% @doc
 %% Delete a key/value pair in the specified column family 
@@ -224,8 +268,11 @@ delete(DBHandle, Key, WriteOpts) ->
                                        CFHandle::cf_handle(),
                                        Key::binary(),
                                        WriteOpts::write_options()).
-delete(DBHandle, CFHandle, Key, WriteOpts) ->
+delete(_DBHandle, _CFHandle, _Key, _WriteOpts) ->
     {error, not_implemeted}.
+
+async_write(_CallerRef, _DBHandle, _WriteActions, _WriteOpts) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Apply the specified updates to the database.
@@ -234,7 +281,12 @@ delete(DBHandle, CFHandle, Key, WriteOpts) ->
                                        WriteActions::write_actions(),
                                        WriteOpts::write_options()).
 write(DBHandle, WriteActions, WriteOpts) ->
-    {error, not_implemeted}.
+    CallerRef = make_ref(),
+    async_write(CallerRef, DBHandle, WriteActions, WriteOpts),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_get(_CallerRef, _DBHandle, _Key, _ReadOpts) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Retrieve a key/value pair in the default column family 
@@ -243,7 +295,9 @@ write(DBHandle, WriteActions, WriteOpts) ->
                                                    Key::binary(),
                                                    ReadOpts::read_options()).
 get(DBHandle, Key, ReadOpts) ->
-    {error, not_implemeted}.
+    CallerRef = make_ref(),
+    async_get(CallerRef, DBHandle, Key, ReadOpts),
+    ?WAIT_FOR_REPLY(CallerRef).
  
 %% @doc
 %% Retrieve a key/value pair in the specified column family 
@@ -252,9 +306,15 @@ get(DBHandle, Key, ReadOpts) ->
                                                    CFHandle::cf_handle(),
                                                    Key::binary(),
                                                    ReadOpts::read_options()).
-get(DBHandle, CFHandle, Key, ReadOpts) ->
+get(_DBHandle, _CFHandle, _Key, _ReadOpts) ->
     {error, not_implemeted}.
- 
+
+async_iterator(_CallerRef, _DBHandle, _ReadOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
+async_iterator(_CallerRef, _DBHandle, _ReadOpts, keys_only) ->
+    erlang:nif_error({error, not_loaded}).
+
 %% @doc
 %% Return a iterator over the contents of the database.
 %% The result of iterator() is initially invalid (caller must
@@ -263,16 +323,26 @@ get(DBHandle, CFHandle, Key, ReadOpts) ->
               {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
                                                        ReadOpts::read_options()).
 iterator(DBHandle, ReadOpts) ->
-    {error, not_implemeted}.
+    CallerRef = make_ref(),
+    async_iterator(CallerRef, DBHandle, ReadOpts),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+iterator(DBHandle, ReadOpts, keys_only) ->
+    CallerRef = make_ref(),
+    async_iterator(CallerRef, DBHandle, ReadOpts, keys_only),
+    ?WAIT_FOR_REPLY(CallerRef).
  
 %% @doc
 %% Return a iterator over the contents of the specified column family.
--spec(iterator(DBHandle, CFHandle, ReadOpts) -> 
+-spec(iterator_with_cf(DBHandle, CFHandle, ReadOpts) -> 
               {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
                                                        CFHandle::cf_handle(),
                                                        ReadOpts::read_options()).
-iterator(DBHandle, CFHandle, ReadOpts) ->
+iterator_with_cf(_DBHandle, _CFHandle, _ReadOpts) ->
     {error, not_implemeted}.
+
+async_iterator_move(_CallerRef, _ITRHandle, _ITRAction) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Move to the specified place 
@@ -283,14 +353,27 @@ iterator(DBHandle, CFHandle, ReadOpts) ->
               {error, iterator_closed} when ITRHandle::itr_handle(),
                                             ITRAction::iterator_action()).
 iterator_move(ITRHandle, ITRAction) ->
-    {error, invalid_iterator}.
- 
+    case async_iterator_move(undefined, ITRHandle, ITRAction) of
+    Ref when is_reference(Ref) ->
+        receive
+            {Ref, X} -> X
+        end;
+    {ok, _} = Key -> Key;
+    {ok, _, _} = KeyVal -> KeyVal;
+    ER -> ER
+    end.
+
+async_iterator_close(_CallerRef, _ITRHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
 %% @doc
 %% Close a iterator
 -spec(iterator_close(ITRHandle) -> 
               ok when ITRHandle::itr_handle()).
 iterator_close(ITRHandle) ->
-    ok.
+    CallerRef = make_ref(),
+    async_iterator_close(CallerRef, ITRHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
  
 -type fold_fun() :: fun(({Key::binary(), Value::binary()}, any()) -> any()).
  
@@ -305,8 +388,8 @@ iterator_close(ITRHandle) ->
                          Fun::fold_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold(DBHandle, Fun, Acc0, ReadOpts) ->
-    Acc0.
+fold(_DBHandle, _Fun, _Acc0, _ReadOpts) ->
+    _Acc0.
  
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
@@ -317,8 +400,8 @@ fold(DBHandle, Fun, Acc0, ReadOpts) ->
                          Fun::fold_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
-    Acc0.
+fold(_DBHandle, _CFHandle, _Fun, _Acc0, _ReadOpts) ->
+    _Acc0.
  
 -type fold_keys_fun() :: fun((Key::binary(), any()) -> any()).
  
@@ -333,8 +416,8 @@ fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
                          Fun::fold_keys_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
-    Acc0.
+fold_keys(_DBHandle, _Fun, _Acc0, _ReadOpts) ->
+    _Acc0.
  
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
@@ -345,17 +428,20 @@ fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
                          Fun::fold_keys_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold_keys(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
-    Acc0.
+fold_keys(_DBHandle, _CFHandle, _Fun, _Acc0, _ReadOpts) ->
+    _Acc0.
  
+is_empty(_DBHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
 %% @doc
 %% Destroy the contents of the specified database.
 %% Be very careful using this method.
 -spec(destroy(Name, DBOpts) -> 
               ok | {error, any()} when Name::file:filename_all(),
                                        DBOpts::db_options()).
-destroy(Name, DBOpts) ->
-    {error, not_implemeted}.
+destroy(_Name, _DBOpts) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Try to repair as much of the contents of the database as possible.
@@ -363,8 +449,8 @@ destroy(Name, DBOpts) ->
 -spec(repair(Name, DBOpts) -> 
               ok | {error, any()} when Name::file:filename_all(),
                                        DBOpts::db_options()).
-repair(Name, DBOpts) ->
-    {error, not_implemeted}.
+repair(_Name, _DBOpts) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
 %% Return the approximate number of keys in the default column family.
@@ -372,7 +458,7 @@ repair(Name, DBOpts) ->
 %%
 -spec(count(DBHandle) -> 
               non_neg_integer() | {error, any()} when DBHandle::db_handle()).
-count(DBHandle) ->
+count(_DBHandle) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -381,7 +467,7 @@ count(DBHandle) ->
 -spec(count(DBHandle, CFHandle) -> 
               non_neg_integer() | {error, any()} when DBHandle::db_handle(),
                                                       CFHandle::cf_handle()).
-count(DBHandle, CFHandle) ->
+count(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -390,7 +476,7 @@ count(DBHandle, CFHandle) ->
 %%
 -spec(status(DBHandle) -> 
               string() | {error, any()} when DBHandle::db_handle()).
-status(DBHandle) ->
+status(_DBHandle) ->
     {error, not_implemeted}.
  
 %% @doc
@@ -399,7 +485,7 @@ status(DBHandle) ->
 -spec(status(DBHandle, CFHandle) -> 
               string() | {error, any()} when DBHandle::db_handle(),
                                              CFHandle::cf_handle()).
-status(DBHandle, CFHandle) ->
+status(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
 
 %% ===================================================================

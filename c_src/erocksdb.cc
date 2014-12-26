@@ -1381,6 +1381,7 @@ try
     ATOM(erocksdb::ATOM_ERROR, "error");
     ATOM(erocksdb::ATOM_EINVAL, "einval");
     ATOM(erocksdb::ATOM_BADARG, "badarg");
+    ATOM(erocksdb::ATOM_NOT_FOUND, "not_found");
 
     // Related to CFOptions
     ATOM(erocksdb::ATOM_BLOCK_CACHE_SIZE_MB_FOR_POINT_LOOKUP, "block_cache_size_mb_for_point_lookup");

@@ -27,14 +27,14 @@
 
 prev_test() ->
     os:cmd("rm -rf ltest"),  % NOTE
-    {ok, Ref} = eleveldb:open("ltest", [{create_if_missing, true}]),
+    {ok, Ref} = erocksdb:open("ltest", [{create_if_missing, true}], []),
     try
-      eleveldb:put(Ref, <<"a">>, <<"x">>, []),
-      eleveldb:put(Ref, <<"b">>, <<"y">>, []),
-      {ok, I} = eleveldb:iterator(Ref, []),
-        ?assertEqual({ok, <<"a">>, <<"x">>},eleveldb:iterator_move(I, <<>>)),
-        ?assertEqual({ok, <<"b">>, <<"y">>},eleveldb:iterator_move(I, next)),
-        ?assertEqual({ok, <<"a">>, <<"x">>},eleveldb:iterator_move(I, prev))
+      erocksdb:put(Ref, <<"a">>, <<"x">>, []),
+      erocksdb:put(Ref, <<"b">>, <<"y">>, []),
+      {ok, I} = erocksdb:iterator(Ref, []),
+        ?assertEqual({ok, <<"a">>, <<"x">>},erocksdb:iterator_move(I, <<>>)),
+        ?assertEqual({ok, <<"b">>, <<"y">>},erocksdb:iterator_move(I, next)),
+        ?assertEqual({ok, <<"a">>, <<"x">>},erocksdb:iterator_move(I, prev))
     after
-      eleveldb:close(Ref)
+      erocksdb:close(Ref)
     end.

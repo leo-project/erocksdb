@@ -388,8 +388,9 @@ iterator_close(ITRHandle) ->
                          Fun::fold_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold(_DBHandle, _Fun, _Acc0, _ReadOpts) ->
-    _Acc0.
+fold(DBHandle, Fun, Acc0, ReadOpts) ->
+    {ok, Itr} = iterator(DBHandle, ReadOpts),
+    do_fold(Itr, Fun, Acc0).
  
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
@@ -416,8 +417,9 @@ fold(_DBHandle, _CFHandle, _Fun, _Acc0, _ReadOpts) ->
                          Fun::fold_keys_fun(),
                          Acc0::any(),
                          ReadOpts::read_options()).
-fold_keys(_DBHandle, _Fun, _Acc0, _ReadOpts) ->
-    _Acc0.
+fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
+    {ok, Itr} = iterator(DBHandle, ReadOpts, keys_only),
+    do_fold(Itr, Fun, Acc0).
  
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
@@ -489,6 +491,27 @@ status(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
 
 %% ===================================================================
+%% Internal functions
+%% ===================================================================
+do_fold(Itr, Fun, Acc0) ->
+    try
+        fold_loop(iterator_move(Itr, first), Itr, Fun, Acc0)
+    after
+        iterator_close(Itr)
+    end.
+
+fold_loop({error, iterator_closed}, _Itr, _Fun, Acc0) ->
+    throw({iterator_closed, Acc0});
+fold_loop({error, invalid_iterator}, _Itr, _Fun, Acc0) ->
+    Acc0;
+fold_loop({ok, K}, Itr, Fun, Acc0) ->
+    Acc = Fun(K, Acc0),
+    fold_loop(iterator_move(Itr, next), Itr, Fun, Acc);
+fold_loop({ok, K, V}, Itr, Fun, Acc0) ->
+    Acc = Fun({K, V}, Acc0),
+    fold_loop(iterator_move(Itr, next), Itr, Fun, Acc).
+
+%% ===================================================================
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
@@ -506,39 +529,28 @@ open_test_Z() ->
     not_found = ?MODULE:get(Ref, <<"abc">>, []),
     true = ?MODULE:is_empty(Ref).
 
-%%%fold_test() -> [{fold_test_Z(), l} || l <- lists:seq(1, 20)].
-%%%fold_test_Z() ->
-%%%    os:cmd("rm -rf /tmp/erocksdb.fold.test"),
-%%%    {ok, Ref} = open("/tmp/erocksdb.fold.test", [{create_if_missing, true}]),
-%%%    ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
-%%%    [{<<"abc">>, <<"123">>},
-%%%     {<<"def">>, <<"456">>},
-%%%     {<<"hij">>, <<"789">>}] = lists:reverse(fold(Ref, fun({K, V}, Acc) -> [{K, V} | Acc] end,
-%%%                                                  [], [])).
-%%%
-%%%fold_keys_test() -> [{fold_keys_test_Z(), l} || l <- lists:seq(1, 20)].
-%%%fold_keys_test_Z() ->
-%%%    os:cmd("rm -rf /tmp/erocksdb.fold.keys.test"),
-%%%    {ok, Ref} = open("/tmp/erocksdb.fold.keys.test", [{create_if_missing, true}]),
-%%%    ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
-%%%    [<<"abc">>, <<"def">>, <<"hij">>] = lists:reverse(fold_keys(Ref,
-%%%                                                                fun(K, Acc) -> [K | Acc] end,
-%%%                                                                [], [])).
-%%%
-%%%fold_from_key_test() -> [{fold_from_key_test_Z(), l} || l <- lists:seq(1, 20)].
-%%%fold_from_key_test_Z() ->
-%%%    os:cmd("rm -rf /tmp/erocksdb.fold.fromkeys.test"),
-%%%    {ok, Ref} = open("/tmp/erocksdb.fromfold.keys.test", [{create_if_missing, true}]),
-%%%    ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
-%%%    ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
-%%%    [<<"def">>, <<"hij">>] = lists:reverse(fold_keys(Ref,
-%%%                                                     fun(K, Acc) -> [K | Acc] end,
-%%%                                                     [], [{first_key, <<"d">>}])).
+fold_test() -> [{fold_test_Z(), l} || l <- lists:seq(1, 20)].
+fold_test_Z() ->
+    os:cmd("rm -rf /tmp/erocksdb.fold.test"),
+    {ok, Ref} = open("/tmp/erocksdb.fold.test", [{create_if_missing, true}], []),
+    ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
+    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
+    ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
+    [{<<"abc">>, <<"123">>},
+     {<<"def">>, <<"456">>},
+     {<<"hij">>, <<"789">>}] = lists:reverse(fold(Ref, fun({K, V}, Acc) -> [{K, V} | Acc] end,
+                                                  [], [])).
+
+fold_keys_test() -> [{fold_keys_test_Z(), l} || l <- lists:seq(1, 20)].
+fold_keys_test_Z() ->
+    os:cmd("rm -rf /tmp/erocksdb.fold.keys.test"),
+    {ok, Ref} = open("/tmp/erocksdb.fold.keys.test", [{create_if_missing, true}], []),
+    ok = ?MODULE:put(Ref, <<"def">>, <<"456">>, []),
+    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
+    ok = ?MODULE:put(Ref, <<"hij">>, <<"789">>, []),
+    [<<"abc">>, <<"def">>, <<"hij">>] = lists:reverse(fold_keys(Ref,
+                                                                fun(K, Acc) -> [K | Acc] end,
+                                                                [], [])).
 
 destroy_test() -> [{destroy_test_Z(), l} || l <- lists:seq(1, 20)].
 destroy_test_Z() ->
@@ -586,71 +598,71 @@ close_test_Z() ->
     ?assertEqual(ok, close(Ref)),
     ?assertEqual({error, einval}, close(Ref)).
 
-%%%close_fold_test() -> [{close_fold_test_Z(), l} || l <- lists:seq(1, 20)].
-%%%close_fold_test_Z() ->
-%%%    os:cmd("rm -rf /tmp/erocksdb.close_fold.test"),
-%%%    {ok, Ref} = open("/tmp/erocksdb.close_fold.test", [{create_if_missing, true}]),
-%%%    ok = erocksdb:put(Ref, <<"k">>,<<"v">>,[]),
-%%%    ?assertException(throw, {iterator_closed, ok}, % ok is returned by close as the acc
-%%%                     erocksdb:fold(Ref, fun(_,_A) -> erocksdb:close(Ref) end, undefined, [])).
-%%%
+close_fold_test() -> [{close_fold_test_Z(), l} || l <- lists:seq(1, 20)].
+close_fold_test_Z() ->
+    os:cmd("rm -rf /tmp/erocksdb.close_fold.test"),
+    {ok, Ref} = open("/tmp/erocksdb.close_fold.test", [{create_if_missing, true}], []),
+    ok = erocksdb:put(Ref, <<"k">>,<<"v">>,[]),
+    ?assertException(throw, {iterator_closed, ok}, % ok is returned by close as the acc
+                     erocksdb:fold(Ref, fun(_,_A) -> erocksdb:close(Ref) end, undefined, [])).
+
 -ifdef(EQC).
 
-%%%qc(P) ->
-%%%    ?assert(eqc:quickcheck(?QC_OUT(P))).
-%%%
-%%%keys() ->
-%%%    eqc_gen:non_empty(list(eqc_gen:non_empty(binary()))).
-%%%
-%%%values() ->
-%%%    eqc_gen:non_empty(list(binary())).
-%%%
-%%%ops(Keys, Values) ->
-%%%    {oneof([put, delete]), oneof(Keys), oneof(Values)}.
-%%%
-%%%apply_kv_ops([], _Ref, Acc0) ->
-%%%    Acc0;
-%%%apply_kv_ops([{put, K, V} | Rest], Ref, Acc0) ->
-%%%    ok = erocksdb:put(Ref, K, V, []),
-%%%    apply_kv_ops(Rest, Ref, orddict:store(K, V, Acc0));
-%%%apply_kv_ops([{delete, K, _} | Rest], Ref, Acc0) ->
-%%%    ok = erocksdb:delete(Ref, K, []),
-%%%    apply_kv_ops(Rest, Ref, orddict:store(K, deleted, Acc0)).
-%%%
-%%%prop_put_delete() ->
-%%%    ?LET({Keys, Values}, {keys(), values()},
-%%%         ?FORALL(Ops, eqc_gen:non_empty(list(ops(Keys, Values))),
-%%%                 begin
-%%%                     ?cmd("rm -rf /tmp/erocksdb.putdelete.qc"),
-%%%                     {ok, Ref} = erocksdb:open("/tmp/erocksdb.putdelete.qc",
-%%%                                                [{create_if_missing, true}], []),
-%%%                     Model = apply_kv_ops(Ops, Ref, []),
-%%%
-%%%                     %% Valdiate that all deleted values return not_found
-%%%                     F = fun({K, deleted}) ->
-%%%                                 ?assertEqual(not_found, erocksdb:get(Ref, K, []));
-%%%                            ({K, V}) ->
-%%%                                 ?assertEqual({ok, V}, erocksdb:get(Ref, K, []))
-%%%                         end,
-%%%                     lists:map(F, Model),
-%%%
-%%%                     %% Validate that a fold returns sorted values
-%%%                     Actual = lists:reverse(fold(Ref, fun({K, V}, Acc) -> [{K, V} | Acc] end,
-%%%                                                 [], [])),
-%%%                     ?assertEqual([{K, V} || {K, V} <- Model, V /= deleted],
-%%%                                  Actual),
-%%%                     ok = erocksdb:close(Ref),
-%%%                     true
-%%%                 end)).
-%%%
-%%%prop_put_delete_test_() ->
-%%%    Timeout1 = 10,
-%%%    Timeout2 = 15,
-%%%    %% We use the ?ALWAYS(300, ...) wrapper around the second test as a
-%%%    %% regression test.
-%%%    [{timeout, 3*Timeout1, {"No ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout1,prop_put_delete())) end}},
-%%%     {timeout, 10*Timeout2, {"With ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout2,?ALWAYS(150,prop_put_delete()))) end}}].
-%%%
+qc(P) ->
+    ?assert(eqc:quickcheck(?QC_OUT(P))).
+
+keys() ->
+    eqc_gen:non_empty(list(eqc_gen:non_empty(binary()))).
+
+values() ->
+    eqc_gen:non_empty(list(binary())).
+
+ops(Keys, Values) ->
+    {oneof([put, delete]), oneof(Keys), oneof(Values)}.
+
+apply_kv_ops([], _Ref, Acc0) ->
+    Acc0;
+apply_kv_ops([{put, K, V} | Rest], Ref, Acc0) ->
+    ok = erocksdb:put(Ref, K, V, []),
+    apply_kv_ops(Rest, Ref, orddict:store(K, V, Acc0));
+apply_kv_ops([{delete, K, _} | Rest], Ref, Acc0) ->
+    ok = erocksdb:delete(Ref, K, []),
+    apply_kv_ops(Rest, Ref, orddict:store(K, deleted, Acc0)).
+
+prop_put_delete() ->
+    ?LET({Keys, Values}, {keys(), values()},
+         ?FORALL(Ops, eqc_gen:non_empty(list(ops(Keys, Values))),
+                 begin
+                     ?cmd("rm -rf /tmp/erocksdb.putdelete.qc"),
+                     {ok, Ref} = erocksdb:open("/tmp/erocksdb.putdelete.qc",
+                                                [{create_if_missing, true}], []),
+                     Model = apply_kv_ops(Ops, Ref, []),
+
+                     %% Valdiate that all deleted values return not_found
+                     F = fun({K, deleted}) ->
+                                 ?assertEqual(not_found, erocksdb:get(Ref, K, []));
+                            ({K, V}) ->
+                                 ?assertEqual({ok, V}, erocksdb:get(Ref, K, []))
+                         end,
+                     lists:map(F, Model),
+
+                     %% Validate that a fold returns sorted values
+                     Actual = lists:reverse(fold(Ref, fun({K, V}, Acc) -> [{K, V} | Acc] end,
+                                                 [], [])),
+                     ?assertEqual([{K, V} || {K, V} <- Model, V /= deleted],
+                                  Actual),
+                     ok = erocksdb:close(Ref),
+                     true
+                 end)).
+
+prop_put_delete_test_() ->
+    Timeout1 = 10,
+    Timeout2 = 15,
+    %% We use the ?ALWAYS(300, ...) wrapper around the second test as a
+    %% regression test.
+    [{timeout, 3*Timeout1, {"No ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout1,prop_put_delete())) end}},
+     {timeout, 10*Timeout2, {"With ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout2,?ALWAYS(150,prop_put_delete()))) end}}].
+
 -endif.
 
 -endif.

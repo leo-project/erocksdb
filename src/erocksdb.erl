@@ -30,7 +30,7 @@
 -export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
--export([count/1, count/2, status/1, status/2]).
+-export([count/1, count/2, status/1, status/2, status/3]).
  
 -export_type([db_handle/0,
               cf_handle/0,
@@ -473,21 +473,31 @@ count(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
  
 %% @doc
-%% Return the current status of the default column family as a string representation.
+%% Return the current status of the default column family
 %% Implemented by calling GetProperty with "rocksdb.stats"
 %%
 -spec(status(DBHandle) -> 
-              string() | {error, any()} when DBHandle::db_handle()).
-status(_DBHandle) ->
-    {error, not_implemeted}.
+              {ok, any()} | {error, any()} when DBHandle::db_handle()).
+status(DBHandle) ->
+    status(DBHandle, <<"rocksdb.stats">>).
+
+%% @doc
+%% Return the RocksDB internal status of the default column family specified at Property
+%%
+-spec(status(DBHandle, Property) ->
+              {ok, any()} | {error, any()} when DBHandle::db_handle(),
+                                                Property::binary()).
+status(_DBHandle, _Property) ->
+    erlang:nif_error({error, not_loaded}).
  
 %% @doc
-%% Return the current status of the specified column family as a string representation.
+%% Return the RocksDB internal status of the specified column family specified at Property
 %%
--spec(status(DBHandle, CFHandle) -> 
+-spec(status(DBHandle, CFHandle, Property) ->
               string() | {error, any()} when DBHandle::db_handle(),
-                                             CFHandle::cf_handle()).
-status(_DBHandle, _CFHandle) ->
+                                             CFHandle::cf_handle(),
+                                             Property::binary()).
+status(_DBHandle, _CFHandle, _Property) ->
     {error, not_implemeted}.
 
 %% ===================================================================

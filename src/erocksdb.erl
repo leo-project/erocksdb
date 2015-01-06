@@ -460,8 +460,13 @@ repair(_Name, _DBOpts) ->
 %%
 -spec(count(DBHandle) -> 
               non_neg_integer() | {error, any()} when DBHandle::db_handle()).
-count(_DBHandle) ->
-    {error, not_implemeted}.
+count(DBHandle) ->
+    case status(DBHandle, <<"rocksdb.estimate-num-keys">>) of
+        {ok, BinCount} ->
+            erlang:binary_to_integer(BinCount);
+        Error ->
+            Error
+    end.
  
 %% @doc
 %% Return the approximate number of keys in the specified column family.
@@ -534,6 +539,7 @@ open_test_Z() ->
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     false = ?MODULE:is_empty(Ref),
     {ok, <<"123">>} = ?MODULE:get(Ref, <<"abc">>, []),
+    {ok, 1} = ?MODULE:count(Ref),
     not_found = ?MODULE:get(Ref, <<"def">>, []),
     ok = ?MODULE:delete(Ref, <<"abc">>, []),
     not_found = ?MODULE:get(Ref, <<"abc">>, []),

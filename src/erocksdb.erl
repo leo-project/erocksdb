@@ -578,34 +578,31 @@ destroy_test_Z() ->
     ok = ?MODULE:destroy("/tmp/erocksdb.destroy.test", []),
     {error, {db_open, _}} = open("/tmp/erocksdb.destroy.test", [{error_if_exists, true}], []).
 
-%%%compression_test() -> [{compression_test_Z(), l} || l <- lists:seq(1, 20)].
-%%%compression_test_Z() ->
-%%%    CompressibleData = list_to_binary([0 || _X <- lists:seq(1,20)]),
-%%%    os:cmd("rm -rf /tmp/erocksdb.compress.0 /tmp/erocksdb.compress.1"),
-%%%    {ok, Ref0} = open("/tmp/erocksdb.compress.0", [{write_buffer_size, 5},
-%%%                                                   {create_if_missing, true},
-%%%                                                   {compression, false}]),
-%%%    [ok = ?MODULE:put(Ref0, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
-%%%        I <- lists:seq(1,10)],
-%%%    {ok, Ref1} = open("/tmp/erocksdb.compress.1", [{write_buffer_size, 5},
-%%%                                                   {create_if_missing, true},
-%%%                                                   {compression, true}]),
-%%%    [ok = ?MODULE:put(Ref1, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
-%%%        I <- lists:seq(1,10)],
-%%%	%% Check both of the LOG files created to see if the compression option was correctly
-%%%	%% passed down
-%%%	MatchCompressOption =
-%%%		fun(File, Expected) ->
-%%%				{ok, Contents} = file:read_file(File),
-%%%				case re:run(Contents, "Options.compression: " ++ Expected) of
-%%%					{match, _} -> match;
-%%%					nomatch -> nomatch
-%%%				end
-%%%		end,
-%%%	Log0Option = MatchCompressOption("/tmp/erocksdb.compress.0/LOG", "0"),
-%%%	Log1Option = MatchCompressOption("/tmp/erocksdb.compress.1/LOG", "1"),
-%%%	?assert(Log0Option =:= match andalso Log1Option =:= match).
-%%%
+compression_test() -> [{compression_test_Z(), l} || l <- lists:seq(1, 20)].
+compression_test_Z() ->
+    CompressibleData = list_to_binary([0 || _X <- lists:seq(1,20)]),
+    os:cmd("rm -rf /tmp/erocksdb.compress.0 /tmp/erocksdb.compress.1"),
+    {ok, Ref0} = open("/tmp/erocksdb.compress.0", [{create_if_missing, true}],
+                                                  [{compression, none}]),
+    [ok = ?MODULE:put(Ref0, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
+        I <- lists:seq(1,10)],
+    {ok, Ref1} = open("/tmp/erocksdb.compress.1", [{create_if_missing, true}],
+                                                  [{compression, snappy}]),
+    [ok = ?MODULE:put(Ref1, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
+        I <- lists:seq(1,10)],
+	%% Check both of the LOG files created to see if the compression option was correctly
+	%% passed down
+	MatchCompressOption =
+		fun(File, Expected) ->
+				{ok, Contents} = file:read_file(File),
+				case re:run(Contents, "Options.compression: " ++ Expected) of
+					{match, _} -> match;
+					nomatch -> nomatch
+				end
+		end,
+	Log0Option = MatchCompressOption("/tmp/erocksdb.compress.0/LOG", "0"),
+	Log1Option = MatchCompressOption("/tmp/erocksdb.compress.1/LOG", "1"),
+	?assert(Log0Option =:= match andalso Log1Option =:= match).
 
 close_test() -> [{close_test_Z(), l} || l <- lists:seq(1, 20)].
 close_test_Z() ->

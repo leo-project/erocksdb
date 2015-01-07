@@ -39,6 +39,7 @@
 #include "rocksdb/env.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb/cache.h"
+#include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
 
 #ifndef INCL_THREADING_H
@@ -119,6 +120,7 @@ ERL_NIF_TERM ATOM_FILTER_DELETES;
 ERL_NIF_TERM ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_SUPPORT;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_NUM_LOCKS;
+ERL_NIF_TERM ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE;
 
 // Related to DBOptions
 ERL_NIF_TERM ATOM_TOTAL_THREADS;
@@ -688,6 +690,16 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             unsigned int inplace_update_num_locks;
             if (enif_get_uint(env, option[1], &inplace_update_num_locks))
                 opts.inplace_update_num_locks= inplace_update_num_locks;
+        }
+        else if (option[0] == erocksdb::ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE)
+        {
+            ErlNifUInt64 table_factory_block_cache_size;
+            if (enif_get_uint64(env, option[1], &table_factory_block_cache_size))
+            {
+                rocksdb::BlockBasedTableOptions bbtOpts;
+                bbtOpts.block_cache = rocksdb::NewLRUCache(table_factory_block_cache_size);
+                opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));
+            }
         }
     }
     return erocksdb::ATOM_OK;
@@ -1413,6 +1425,7 @@ try
     ATOM(erocksdb::ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS, "max_sequential_skip_in_iterations");
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_SUPPORT, "inplace_update_support");
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS, "inplace_update_num_locks");
+    ATOM(erocksdb::ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE, "table_factory_block_cache_size");
 
     // Related to DBOptions
     ATOM(erocksdb::ATOM_TOTAL_THREADS, "total_threads");

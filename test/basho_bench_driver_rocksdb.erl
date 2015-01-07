@@ -24,7 +24,6 @@
 -export([new/1,
          run/4]).
 
--include("basho_bench.hrl").
 
 -record(state, { db_handle,
                  filename,
@@ -39,8 +38,9 @@ new(_Id) ->
     %% Make sure erocksdb is available
     case code:which(erocksdb) of
         non_existing ->
-            ?FAIL_MSG("~s requires erocksdb to be available on code path.\n",
-                      [?MODULE]);
+            io:format("~s requires erocksdb to be available on code path.\n",
+                      [?MODULE]),
+            exit(1);
         _ ->
             ok
     end,
@@ -55,7 +55,7 @@ new(_Id) ->
     CFOptions = basho_bench_config:get(rocksdb_cf_options, []),
     case erocksdb:open(Filename, DBOptions, CFOptions) of
         {error, Reason} ->
-            ?FAIL_MSG("Failed to open rocksdb in ~s: ~p\n", [Filename, Reason]);
+            io:format("Failed to open rocksdb in ~s: ~p\n", [Filename, Reason]);
         {ok, DBHandle}->
             {ok, #state { db_handle = DBHandle,
                           filename = Filename,

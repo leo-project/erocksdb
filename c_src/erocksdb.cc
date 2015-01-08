@@ -516,8 +516,11 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             // @TODO ignored now 
             ;
         else if (option[0] == erocksdb::ATOM_MEMTABLE_MEMORY_BUDGET)
-            // @TODO ignored now
-            ;
+        {
+            ErlNifUInt64 memtable_memory_budget;
+            if (enif_get_uint64(env, option[1], &memtable_memory_budget))
+                opts.OptimizeLevelStyleCompaction(memtable_memory_budget);
+        }
         else if (option[0] == erocksdb::ATOM_WRITE_BUFFER_SIZE)
         {
             unsigned int write_buffer_size;

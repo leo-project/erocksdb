@@ -698,6 +698,8 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             {
                 rocksdb::BlockBasedTableOptions bbtOpts;
                 bbtOpts.block_cache = rocksdb::NewLRUCache(table_factory_block_cache_size);
+                bbtOpts.filter_policy = std::shared_ptr<const rocksdb::FilterPolicy>(rocksdb::NewBloomFilterPolicy(10));
+
                 opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));
             }
         }

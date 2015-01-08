@@ -321,8 +321,11 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
     if (enif_get_tuple(env, item, &arity, &option) && 2==arity)
     {
         if (option[0] == erocksdb::ATOM_TOTAL_THREADS)
-            // @TODO ignored now 
-            ;
+        {
+            int total_threads;
+            if (enif_get_int(env, option[1], &total_threads))
+                opts.IncreaseParallelism(total_threads);
+        }
         else if (option[0] == erocksdb::ATOM_CREATE_IF_MISSING)
             opts.create_if_missing = (option[1] == erocksdb::ATOM_TRUE);
         else if (option[0] == erocksdb::ATOM_CREATE_MISSING_COLUMN_FAMILIES)

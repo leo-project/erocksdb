@@ -292,9 +292,9 @@ async_get(_CallerRef, _DBHandle, _Key, _ReadOpts) ->
 %% @doc
 %% Retrieve a key/value pair in the default column family 
 -spec(get(DBHandle, Key, ReadOpts) -> 
-              {ok, binary()} | {error, any()} when DBHandle::db_handle(),
-                                                   Key::binary(),
-                                                   ReadOpts::read_options()).
+              {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
+                                                               Key::binary(),
+                                                               ReadOpts::read_options()).
 get(DBHandle, Key, ReadOpts) ->
     CallerRef = make_ref(),
     async_get(CallerRef, DBHandle, Key, ReadOpts),
@@ -303,10 +303,10 @@ get(DBHandle, Key, ReadOpts) ->
 %% @doc
 %% Retrieve a key/value pair in the specified column family 
 -spec(get(DBHandle, CFHandle, Key, ReadOpts) -> 
-              {ok, binary()} | {error, any()} when DBHandle::db_handle(),
-                                                   CFHandle::cf_handle(),
-                                                   Key::binary(),
-                                                   ReadOpts::read_options()).
+              {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
+                                                               CFHandle::cf_handle(),
+                                                               Key::binary(),
+                                                               ReadOpts::read_options()).
 get(_DBHandle, _CFHandle, _Key, _ReadOpts) ->
     {error, not_implemeted}.
 

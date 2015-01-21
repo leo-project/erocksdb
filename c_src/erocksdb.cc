@@ -41,6 +41,7 @@
 #include "rocksdb/cache.h"
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/slice_transform.h"
 
 #ifndef INCL_THREADING_H
     #include "threading.h"
@@ -121,6 +122,7 @@ ERL_NIF_TERM ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_SUPPORT;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_NUM_LOCKS;
 ERL_NIF_TERM ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE;
+ERL_NIF_TERM ATOM_IN_MEMORY_MODE;
 
 // Related to DBOptions
 ERL_NIF_TERM ATOM_TOTAL_THREADS;
@@ -707,6 +709,33 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 bbtOpts.filter_policy = std::shared_ptr<const rocksdb::FilterPolicy>(rocksdb::NewBloomFilterPolicy(10));
 
                 opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));
+            }
+        }
+        else if (option[0] == erocksdb::ATOM_IN_MEMORY_MODE)
+        {
+            if (option[1] == erocksdb::ATOM_TRUE)
+            {
+                // Set recommended defaults
+                opts.prefix_extractor = std::shared_ptr<const rocksdb::SliceTransform>(rocksdb::NewFixedPrefixTransform(10));
+                opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewPlainTableFactory());
+                opts.allow_mmap_reads = true;
+                opts.compression = rocksdb::CompressionType::kNoCompression;
+                opts.memtable_prefix_bloom_bits = 10000000;
+                opts.memtable_prefix_bloom_probes = 6;
+                opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleUniversal;
+                opts.compaction_options_universal.size_ratio = 10;
+                opts.compaction_options_universal.min_merge_width = 2;
+                opts.compaction_options_universal.max_size_amplification_percent = 50;
+                opts.level0_file_num_compaction_trigger = 0;
+                opts.level0_slowdown_writes_trigger = 8;
+                opts.level0_stop_writes_trigger = 16;
+                opts.bloom_locality = 1;
+                opts.max_open_files = -1;
+                opts.write_buffer_size = 32 << 20;
+                opts.max_write_buffer_number = 2;
+                opts.min_write_buffer_number_to_merge = 1;
+                opts.disableDataSync = 1;
+                opts.bytes_per_sync = 2 << 20;
             }
         }
     }
@@ -1434,6 +1463,7 @@ try
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_SUPPORT, "inplace_update_support");
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS, "inplace_update_num_locks");
     ATOM(erocksdb::ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE, "table_factory_block_cache_size");
+    ATOM(erocksdb::ATOM_IN_MEMORY_MODE, "in_memory_mode");
 
     // Related to DBOptions
     ATOM(erocksdb::ATOM_TOTAL_THREADS, "total_threads");

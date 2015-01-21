@@ -116,7 +116,8 @@ init() ->
                        {max_sequential_skip_in_iterations,  pos_integer()} |
                        {inplace_update_support,  boolean()} |
                        {inplace_update_num_locks,  pos_integer()} |
-                       {table_factory_block_cache_size, pos_integer()}].
+                       {table_factory_block_cache_size, pos_integer()} |
+                       {in_memory_mode, boolean()}].
                        
 -type db_options() :: [{total_threads, pos_integer()} |
                        {create_if_missing, boolean()} |

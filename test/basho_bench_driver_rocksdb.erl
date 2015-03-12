@@ -1,8 +1,8 @@
-%% -------------------------------------------------------------------
+%%======================================================================
 %%
-%% basho_bench: Benchmarking Suite
+%% erocksdb: Erlang Wrapper for RocksDB (https://github.com/facebook/rocksdb)
 %%
-%% Copyright (c) 2009-2010 Basho Techonologies
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -18,12 +18,14 @@
 %% specific language governing permissions and limitations
 %% under the License.
 %%
-%% -------------------------------------------------------------------
+%% @doc Erlang Wrapper for RocksDB
+%% @reference https://github.com/leo-project/erocksdb/blob/master/src/erocksdb.erl
+%% @end
+%%======================================================================
 -module(basho_bench_driver_rocksdb).
 
 -export([new/1,
          run/4]).
-
 
 -record(state, { db_handle,
                  filename,
@@ -50,7 +52,7 @@ new(_Id) ->
     Filename = filename:join(Dir, "test.rocksdb"),
     ok = filelib:ensure_dir(Filename),
 
-    %% Get any erocksdb options 
+    %% Get any erocksdb options
     DBOptions = basho_bench_config:get(rocksdb_db_options, [{create_if_missing, true}]),
     CFOptions = basho_bench_config:get(rocksdb_cf_options, []),
     case erocksdb:open(Filename, DBOptions, CFOptions) of

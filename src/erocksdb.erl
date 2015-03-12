@@ -2,7 +2,7 @@
 %%
 %% erocksdb: Erlang Wrapper for RocksDB (https://github.com/facebook/rocksdb)
 %%
-%% Copyright (c) 2012-2014 Rakuten, Inc.
+%% Copyright (c) 2012-2015 Rakuten, Inc.
 %%
 %% This file is provided to you under the Apache License,
 %% Version 2.0 (the "License"); you may not use this file
@@ -31,7 +31,7 @@
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
 -export([count/1, count/2, status/1, status/2, status/3]).
- 
+
 -export_type([db_handle/0,
               cf_handle/0,
               itr_handle/0,
@@ -75,18 +75,18 @@ init() ->
 
 -record(db_path, {path        :: file:filename_all(),
                   target_size :: non_neg_integer()}).
- 
+
 -record(cf_descriptor, {name    :: string(),
                         options :: cf_options()}).
- 
+
 -type compression_type() :: snappy | zlib | bzip2 | lz4 | lz4h | none.
 -type compaction_style() :: level | universal | fifo | none.
 -type access_hint() :: normal | sequential | willneed | none.
- 
+
 -opaque db_handle() :: binary().
 -opaque cf_handle() :: binary().
 -opaque itr_handle() :: binary().
- 
+
 -type cf_options() :: [{block_cache_size_mb_for_point_lookup, non_neg_integer()} |
                        {memtable_memory_budget, pos_integer()} |
                        {write_buffer_size,  pos_integer()} |
@@ -118,7 +118,7 @@ init() ->
                        {inplace_update_num_locks,  pos_integer()} |
                        {table_factory_block_cache_size, pos_integer()} |
                        {in_memory_mode, boolean()}].
-                       
+
 -type db_options() :: [{total_threads, pos_integer()} |
                        {create_if_missing, boolean()} |
                        {create_missing_column_families, boolean()} |
@@ -152,24 +152,24 @@ init() ->
                        {access_hint, access_hint()} |
                        {use_adaptive_mutex, boolean()} |
                        {bytes_per_sync, non_neg_integer()}].
- 
+
 -type read_options() :: [{verify_checksums, boolean()} |
                          {fill_cache, boolean()} |
                          {iterate_upper_bound, binary()} |
                          {tailing, boolean()} |
                          {total_order_seek, boolean()}].
- 
+
 -type write_options() :: [{sync, boolean()} |
                           {disable_wal, boolean()} |
                           {timeout_hint_us, non_neg_integer()} |
                           {ignore_missing_column_families, boolean()}].
- 
+
 -type write_actions() :: [{put, Key::binary(), Value::binary()} |
                           {put, ColumnFamilyHandle::cf_handle(), Key::binary(), Value::binary()} |
                           {delete, Key::binary()} |
                           {delete, ColumnFamilyHandle::cf_handle(), Key::binary()} |
-                           clear].
- 
+                          clear].
+
 -type iterator_action() :: first | last | next | prev | binary().
 
 async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
@@ -177,111 +177,111 @@ async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
 
 %% @doc
 %% Open RocksDB with the defalut column family
--spec(open(Name, DBOpts, CFOpts) -> 
-              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
-                                                      DBOpts::db_options(),
-                                                      CFOpts::cf_options()).
+-spec(open(Name, DBOpts, CFOpts) ->
+             {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
+                                                     DBOpts::db_options(),
+                                                     CFOpts::cf_options()).
 open(Name, DBOpts, CFOpts) ->
     CallerRef = make_ref(),
     async_open(CallerRef, Name, DBOpts, CFOpts),
     ?WAIT_FOR_REPLY(CallerRef).
- 
+
 %% @doc
 %% Open RocksDB with the specified column families
--spec(open_with_cf(Name, DBOpts, CFDescriptors) -> 
-              {ok, db_handle(), list(cf_handle())} | {error, any()} 
-                                    when Name::file:filename_all(),
-                                         DBOpts :: db_options(),
-                                         CFDescriptors :: list(#cf_descriptor{})).
+-spec(open_with_cf(Name, DBOpts, CFDescriptors) ->
+             {ok, db_handle(), list(cf_handle())} | {error, any()}
+                 when Name::file:filename_all(),
+                      DBOpts :: db_options(),
+                      CFDescriptors :: list(#cf_descriptor{})).
 open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
     {error, not_implemeted}.
 
 async_close(_Callerfef, _DBHandle) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
 %% Close RocksDB
--spec(close(DBHandle) -> 
-              ok | {error, any()} when DBHandle::db_handle()).
+-spec(close(DBHandle) ->
+             ok | {error, any()} when DBHandle::db_handle()).
 close(DBHandle) ->
     CallerRef = make_ref(),
     async_close(CallerRef, DBHandle),
     ?WAIT_FOR_REPLY(CallerRef).
- 
+
 %% @doc
 %% List column families
--spec(list_column_families(Name, DBOpts) -> 
-              {ok, list(string())} | {error, any()} when Name::file:filename_all(),
-                                                         DBOpts::db_options()).
+-spec(list_column_families(Name, DBOpts) ->
+             {ok, list(string())} | {error, any()} when Name::file:filename_all(),
+                                                        DBOpts::db_options()).
 list_column_families(_Name, _DBOpts) ->
     {error, not_implemeted}.
- 
+
 %% @doc
 %% Create a new column family
--spec(create_column_family(DBHandle, Name, CFOpts) -> 
-              {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
-                                                      Name::string(),
-                                                      CFOpts::cf_options()).
+-spec(create_column_family(DBHandle, Name, CFOpts) ->
+             {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                     Name::string(),
+                                                     CFOpts::cf_options()).
 create_column_family(_DBHandle, _Name, _CFOpts) ->
     {error, not_implemeted}.
- 
+
 %% @doc
 %% Drop a column family
--spec(drop_column_family(DBHandle, CFHandle) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       CFHandle::cf_handle()).
+-spec(drop_column_family(DBHandle, CFHandle) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      CFHandle::cf_handle()).
 drop_column_family(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
- 
+
 %% @doc
-%% Put a key/value pair into the default column family 
--spec(put(DBHandle, Key, Value, WriteOpts) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       Key::binary(),
-                                       Value::binary(),
-                                       WriteOpts::write_options()).
+%% Put a key/value pair into the default column family
+-spec(put(DBHandle, Key, Value, WriteOpts) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      Key::binary(),
+                                      Value::binary(),
+                                      WriteOpts::write_options()).
 put(DBHandle, Key, Value, WriteOpts) ->
     write(DBHandle, [{put, Key, Value}], WriteOpts).
- 
+
 %% @doc
-%% Put a key/value pair into the specified column family 
--spec(put(DBHandle, CFHandle, Key, Value, WriteOpts) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       CFHandle::cf_handle(),
-                                       Key::binary(),
-                                       Value::binary(),
-                                       WriteOpts::write_options()).
+%% Put a key/value pair into the specified column family
+-spec(put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      CFHandle::cf_handle(),
+                                      Key::binary(),
+                                      Value::binary(),
+                                      WriteOpts::write_options()).
 put(_DBHandle, _CFHandle, _Key, _Value, _WriteOpts) ->
     {error, not_implemeted}.
- 
+
 %% @doc
-%% Delete a key/value pair in the default column family 
--spec(delete(DBHandle, Key, WriteOpts) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       Key::binary(),
-                                       WriteOpts::write_options()).
+%% Delete a key/value pair in the default column family
+-spec(delete(DBHandle, Key, WriteOpts) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      Key::binary(),
+                                      WriteOpts::write_options()).
 delete(DBHandle, Key, WriteOpts) ->
     write(DBHandle, [{delete, Key}], WriteOpts).
- 
+
 %% @doc
-%% Delete a key/value pair in the specified column family 
--spec(delete(DBHandle, CFHandle, Key, WriteOpts) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       CFHandle::cf_handle(),
-                                       Key::binary(),
-                                       WriteOpts::write_options()).
+%% Delete a key/value pair in the specified column family
+-spec(delete(DBHandle, CFHandle, Key, WriteOpts) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      CFHandle::cf_handle(),
+                                      Key::binary(),
+                                      WriteOpts::write_options()).
 delete(_DBHandle, _CFHandle, _Key, _WriteOpts) ->
     {error, not_implemeted}.
 
 async_write(_CallerRef, _DBHandle, _WriteActions, _WriteOpts) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
 %% Apply the specified updates to the database.
--spec(write(DBHandle, WriteActions, WriteOpts) -> 
-              ok | {error, any()} when DBHandle::db_handle(),
-                                       WriteActions::write_actions(),
-                                       WriteOpts::write_options()).
+-spec(write(DBHandle, WriteActions, WriteOpts) ->
+             ok | {error, any()} when DBHandle::db_handle(),
+                                      WriteActions::write_actions(),
+                                      WriteOpts::write_options()).
 write(DBHandle, WriteActions, WriteOpts) ->
     CallerRef = make_ref(),
     async_write(CallerRef, DBHandle, WriteActions, WriteOpts),
@@ -289,25 +289,25 @@ write(DBHandle, WriteActions, WriteOpts) ->
 
 async_get(_CallerRef, _DBHandle, _Key, _ReadOpts) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
-%% Retrieve a key/value pair in the default column family 
--spec(get(DBHandle, Key, ReadOpts) -> 
-              {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
-                                                               Key::binary(),
-                                                               ReadOpts::read_options()).
+%% Retrieve a key/value pair in the default column family
+-spec(get(DBHandle, Key, ReadOpts) ->
+             {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
+                                                              Key::binary(),
+                                                              ReadOpts::read_options()).
 get(DBHandle, Key, ReadOpts) ->
     CallerRef = make_ref(),
     async_get(CallerRef, DBHandle, Key, ReadOpts),
     ?WAIT_FOR_REPLY(CallerRef).
- 
+
 %% @doc
-%% Retrieve a key/value pair in the specified column family 
--spec(get(DBHandle, CFHandle, Key, ReadOpts) -> 
-              {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
-                                                               CFHandle::cf_handle(),
-                                                               Key::binary(),
-                                                               ReadOpts::read_options()).
+%% Retrieve a key/value pair in the specified column family
+-spec(get(DBHandle, CFHandle, Key, ReadOpts) ->
+             {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
+                                                              CFHandle::cf_handle(),
+                                                              Key::binary(),
+                                                              ReadOpts::read_options()).
 get(_DBHandle, _CFHandle, _Key, _ReadOpts) ->
     {error, not_implemeted}.
 
@@ -321,9 +321,9 @@ async_iterator(_CallerRef, _DBHandle, _ReadOpts, keys_only) ->
 %% Return a iterator over the contents of the database.
 %% The result of iterator() is initially invalid (caller must
 %% call iterator_move function on the iterator before using it).
--spec(iterator(DBHandle, ReadOpts) -> 
-              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
-                                                       ReadOpts::read_options()).
+-spec(iterator(DBHandle, ReadOpts) ->
+             {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                      ReadOpts::read_options()).
 iterator(DBHandle, ReadOpts) ->
     CallerRef = make_ref(),
     async_iterator(CallerRef, DBHandle, ReadOpts),
@@ -333,36 +333,36 @@ iterator(DBHandle, ReadOpts, keys_only) ->
     CallerRef = make_ref(),
     async_iterator(CallerRef, DBHandle, ReadOpts, keys_only),
     ?WAIT_FOR_REPLY(CallerRef).
- 
+
 %% @doc
 %% Return a iterator over the contents of the specified column family.
--spec(iterator_with_cf(DBHandle, CFHandle, ReadOpts) -> 
-              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
-                                                       CFHandle::cf_handle(),
-                                                       ReadOpts::read_options()).
+-spec(iterator_with_cf(DBHandle, CFHandle, ReadOpts) ->
+             {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                      CFHandle::cf_handle(),
+                                                      ReadOpts::read_options()).
 iterator_with_cf(_DBHandle, _CFHandle, _ReadOpts) ->
     {error, not_implemeted}.
 
 async_iterator_move(_CallerRef, _ITRHandle, _ITRAction) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
-%% Move to the specified place 
--spec(iterator_move(ITRHandle, ITRAction) -> 
-              {ok, Key::binary(), Value::binary()} | 
-              {ok, Key::binary()} | 
-              {error, invalid_iterator} | 
-              {error, iterator_closed} when ITRHandle::itr_handle(),
-                                            ITRAction::iterator_action()).
+%% Move to the specified place
+-spec(iterator_move(ITRHandle, ITRAction) ->
+             {ok, Key::binary(), Value::binary()} |
+             {ok, Key::binary()} |
+             {error, invalid_iterator} |
+             {error, iterator_closed} when ITRHandle::itr_handle(),
+                                           ITRAction::iterator_action()).
 iterator_move(ITRHandle, ITRAction) ->
     case async_iterator_move(undefined, ITRHandle, ITRAction) of
-    Ref when is_reference(Ref) ->
-        receive
-            {Ref, X} -> X
-        end;
-    {ok, _} = Key -> Key;
-    {ok, _, _} = KeyVal -> KeyVal;
-    ER -> ER
+        Ref when is_reference(Ref) ->
+            receive
+                {Ref, X} -> X
+            end;
+        {ok, _} = Key -> Key;
+        {ok, _, _} = KeyVal -> KeyVal;
+        ER -> ER
     end.
 
 async_iterator_close(_CallerRef, _ITRHandle) ->
@@ -370,98 +370,98 @@ async_iterator_close(_CallerRef, _ITRHandle) ->
 
 %% @doc
 %% Close a iterator
--spec(iterator_close(ITRHandle) -> 
-              ok when ITRHandle::itr_handle()).
+-spec(iterator_close(ITRHandle) ->
+             ok when ITRHandle::itr_handle()).
 iterator_close(ITRHandle) ->
     CallerRef = make_ref(),
     async_iterator_close(CallerRef, ITRHandle),
     ?WAIT_FOR_REPLY(CallerRef).
- 
+
 -type fold_fun() :: fun(({Key::binary(), Value::binary()}, any()) -> any()).
- 
+
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the default column family
-%% starting with AccIn == Acc0. 
-%% Fun/2 must return a new accumulator which is passed to the next call. 
-%% The function returns the final value of the accumulator. 
+%% starting with AccIn == Acc0.
+%% Fun/2 must return a new accumulator which is passed to the next call.
+%% The function returns the final value of the accumulator.
 %% Acc0 is returned if the default column family is empty.
--spec(fold(DBHandle, Fun, Acc0, ReadOpts) -> 
-              any() when DBHandle::db_handle(),
-                         Fun::fold_fun(),
-                         Acc0::any(),
-                         ReadOpts::read_options()).
+-spec(fold(DBHandle, Fun, Acc0, ReadOpts) ->
+             any() when DBHandle::db_handle(),
+                        Fun::fold_fun(),
+                        Acc0::any(),
+                        ReadOpts::read_options()).
 fold(DBHandle, Fun, Acc0, ReadOpts) ->
     {ok, Itr} = iterator(DBHandle, ReadOpts),
     do_fold(Itr, Fun, Acc0).
- 
+
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
 %% Other specs are same with fold/4
--spec(fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) -> 
-              any() when DBHandle::db_handle(),
-                         CFHandle::cf_handle(),
-                         Fun::fold_fun(),
-                         Acc0::any(),
-                         ReadOpts::read_options()).
+-spec(fold(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
+             any() when DBHandle::db_handle(),
+                        CFHandle::cf_handle(),
+                        Fun::fold_fun(),
+                        Acc0::any(),
+                        ReadOpts::read_options()).
 fold(_DBHandle, _CFHandle, _Fun, _Acc0, _ReadOpts) ->
     _Acc0.
- 
+
 -type fold_keys_fun() :: fun((Key::binary(), any()) -> any()).
- 
+
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the default column family
-%% starting with AccIn == Acc0. 
-%% Fun/2 must return a new accumulator which is passed to the next call. 
-%% The function returns the final value of the accumulator. 
+%% starting with AccIn == Acc0.
+%% Fun/2 must return a new accumulator which is passed to the next call.
+%% The function returns the final value of the accumulator.
 %% Acc0 is returned if the default column family is empty.
--spec(fold_keys(DBHandle, Fun, Acc0, ReadOpts) -> 
-              any() when DBHandle::db_handle(),
-                         Fun::fold_keys_fun(),
-                         Acc0::any(),
-                         ReadOpts::read_options()).
+-spec(fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
+             any() when DBHandle::db_handle(),
+                        Fun::fold_keys_fun(),
+                        Acc0::any(),
+                        ReadOpts::read_options()).
 fold_keys(DBHandle, Fun, Acc0, ReadOpts) ->
     {ok, Itr} = iterator(DBHandle, ReadOpts, keys_only),
     do_fold(Itr, Fun, Acc0).
- 
+
 %% @doc
 %% Calls Fun(Elem, AccIn) on successive elements in the specified column family
 %% Other specs are same with fold_keys/4
--spec(fold_keys(DBHandle, CFHandle, Fun, Acc0, ReadOpts) -> 
-              any() when DBHandle::db_handle(),
-                         CFHandle::cf_handle(),
-                         Fun::fold_keys_fun(),
-                         Acc0::any(),
-                         ReadOpts::read_options()).
+-spec(fold_keys(DBHandle, CFHandle, Fun, Acc0, ReadOpts) ->
+             any() when DBHandle::db_handle(),
+                        CFHandle::cf_handle(),
+                        Fun::fold_keys_fun(),
+                        Acc0::any(),
+                        ReadOpts::read_options()).
 fold_keys(_DBHandle, _CFHandle, _Fun, _Acc0, _ReadOpts) ->
     _Acc0.
- 
+
 is_empty(_DBHandle) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Destroy the contents of the specified database.
 %% Be very careful using this method.
--spec(destroy(Name, DBOpts) -> 
-              ok | {error, any()} when Name::file:filename_all(),
-                                       DBOpts::db_options()).
+-spec(destroy(Name, DBOpts) ->
+             ok | {error, any()} when Name::file:filename_all(),
+                                      DBOpts::db_options()).
 destroy(_Name, _DBOpts) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
 %% Try to repair as much of the contents of the database as possible.
 %% Some data may be lost, so be careful when calling this function
--spec(repair(Name, DBOpts) -> 
-              ok | {error, any()} when Name::file:filename_all(),
-                                       DBOpts::db_options()).
+-spec(repair(Name, DBOpts) ->
+             ok | {error, any()} when Name::file:filename_all(),
+                                      DBOpts::db_options()).
 repair(_Name, _DBOpts) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
 %% Return the approximate number of keys in the default column family.
 %% Implemented by calling GetIntProperty with "rocksdb.estimate-num-keys"
 %%
--spec(count(DBHandle) -> 
-              non_neg_integer() | {error, any()} when DBHandle::db_handle()).
+-spec(count(DBHandle) ->
+             non_neg_integer() | {error, any()} when DBHandle::db_handle()).
 count(DBHandle) ->
     case status(DBHandle, <<"rocksdb.estimate-num-keys">>) of
         {ok, BinCount} ->
@@ -469,22 +469,22 @@ count(DBHandle) ->
         Error ->
             Error
     end.
- 
+
 %% @doc
 %% Return the approximate number of keys in the specified column family.
 %%
--spec(count(DBHandle, CFHandle) -> 
-              non_neg_integer() | {error, any()} when DBHandle::db_handle(),
-                                                      CFHandle::cf_handle()).
+-spec(count(DBHandle, CFHandle) ->
+             non_neg_integer() | {error, any()} when DBHandle::db_handle(),
+                                                     CFHandle::cf_handle()).
 count(_DBHandle, _CFHandle) ->
     {error, not_implemeted}.
- 
+
 %% @doc
 %% Return the current status of the default column family
 %% Implemented by calling GetProperty with "rocksdb.stats"
 %%
--spec(status(DBHandle) -> 
-              {ok, any()} | {error, any()} when DBHandle::db_handle()).
+-spec(status(DBHandle) ->
+             {ok, any()} | {error, any()} when DBHandle::db_handle()).
 status(DBHandle) ->
     status(DBHandle, <<"rocksdb.stats">>).
 
@@ -492,18 +492,18 @@ status(DBHandle) ->
 %% Return the RocksDB internal status of the default column family specified at Property
 %%
 -spec(status(DBHandle, Property) ->
-              {ok, any()} | {error, any()} when DBHandle::db_handle(),
-                                                Property::binary()).
+             {ok, any()} | {error, any()} when DBHandle::db_handle(),
+                                               Property::binary()).
 status(_DBHandle, _Property) ->
     erlang:nif_error({error, not_loaded}).
- 
+
 %% @doc
 %% Return the RocksDB internal status of the specified column family specified at Property
 %%
 -spec(status(DBHandle, CFHandle, Property) ->
-              string() | {error, any()} when DBHandle::db_handle(),
-                                             CFHandle::cf_handle(),
-                                             Property::binary()).
+             string() | {error, any()} when DBHandle::db_handle(),
+                                            CFHandle::cf_handle(),
+                                            Property::binary()).
 status(_DBHandle, _CFHandle, _Property) ->
     {error, not_implemeted}.
 
@@ -532,7 +532,6 @@ fold_loop({ok, K, V}, Itr, Fun, Acc0) ->
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
-
 open_test() -> [{open_test_Z(), l} || l <- lists:seq(1, 20)].
 open_test_Z() ->
     os:cmd("rm -rf /tmp/erocksdb.open.test"),
@@ -585,26 +584,26 @@ compression_test_Z() ->
     CompressibleData = list_to_binary([0 || _X <- lists:seq(1,20)]),
     os:cmd("rm -rf /tmp/erocksdb.compress.0 /tmp/erocksdb.compress.1"),
     {ok, Ref0} = open("/tmp/erocksdb.compress.0", [{create_if_missing, true}],
-                                                  [{compression, none}]),
+                      [{compression, none}]),
     [ok = ?MODULE:put(Ref0, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
         I <- lists:seq(1,10)],
     {ok, Ref1} = open("/tmp/erocksdb.compress.1", [{create_if_missing, true}],
-                                                  [{compression, snappy}]),
+                      [{compression, snappy}]),
     [ok = ?MODULE:put(Ref1, <<I:64/unsigned>>, CompressibleData, [{sync, true}]) ||
         I <- lists:seq(1,10)],
-	%% Check both of the LOG files created to see if the compression option was correctly
-	%% passed down
-	MatchCompressOption =
-		fun(File, Expected) ->
-				{ok, Contents} = file:read_file(File),
-				case re:run(Contents, "Options.compression: " ++ Expected) of
-					{match, _} -> match;
-					nomatch -> nomatch
-				end
-		end,
-	Log0Option = MatchCompressOption("/tmp/erocksdb.compress.0/LOG", "0"),
-	Log1Option = MatchCompressOption("/tmp/erocksdb.compress.1/LOG", "1"),
-	?assert(Log0Option =:= match andalso Log1Option =:= match).
+    %% Check both of the LOG files created to see if the compression option was correctly
+    %% passed down
+    MatchCompressOption =
+        fun(File, Expected) ->
+                {ok, Contents} = file:read_file(File),
+                case re:run(Contents, "Options.compression: " ++ Expected) of
+                    {match, _} -> match;
+                    nomatch -> nomatch
+                end
+        end,
+    Log0Option = MatchCompressOption("/tmp/erocksdb.compress.0/LOG", "0"),
+    Log1Option = MatchCompressOption("/tmp/erocksdb.compress.1/LOG", "1"),
+    ?assert(Log0Option =:= match andalso Log1Option =:= match).
 
 close_test() -> [{close_test_Z(), l} || l <- lists:seq(1, 20)].
 close_test_Z() ->
@@ -622,7 +621,6 @@ close_fold_test_Z() ->
                      erocksdb:fold(Ref, fun(_,_A) -> erocksdb:close(Ref) end, undefined, [])).
 
 -ifdef(EQC).
-
 qc(P) ->
     ?assert(eqc:quickcheck(?QC_OUT(P))).
 
@@ -650,7 +648,7 @@ prop_put_delete() ->
                  begin
                      ?cmd("rm -rf /tmp/erocksdb.putdelete.qc"),
                      {ok, Ref} = erocksdb:open("/tmp/erocksdb.putdelete.qc",
-                                                [{create_if_missing, true}], []),
+                                               [{create_if_missing, true}], []),
                      Model = apply_kv_ops(Ops, Ref, []),
 
                      %% Valdiate that all deleted values return not_found
@@ -675,9 +673,9 @@ prop_put_delete_test_() ->
     Timeout2 = 15,
     %% We use the ?ALWAYS(300, ...) wrapper around the second test as a
     %% regression test.
-    [{timeout, 3*Timeout1, {"No ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout1,prop_put_delete())) end}},
-     {timeout, 10*Timeout2, {"With ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout2,?ALWAYS(150,prop_put_delete()))) end}}].
-
+    [{timeout,  3 * Timeout1,
+      {"No ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout1,prop_put_delete())) end}},
+     {timeout, 10 * Timeout2,
+      {"With ?ALWAYS()", fun() -> qc(eqc:testing_time(Timeout2,?ALWAYS(150,prop_put_delete()))) end}}].
 -endif.
-
 -endif.

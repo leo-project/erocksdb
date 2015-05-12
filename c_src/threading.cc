@@ -31,13 +31,13 @@
     #include "workitems.h"
 #endif
 
-#ifndef __ELEVELDB_DETAIL_HPP
+#ifndef __EROCKSDB_DETAIL_HPP
     #include "detail.hpp"
 #endif
 
-namespace eleveldb {
+namespace erocksdb {
 
-void *eleveldb_write_thread_worker(void *args);
+void *erocksdb_write_thread_worker(void *args);
 
 
 /**
@@ -47,14 +47,14 @@ struct ThreadData
 {
     ErlNifTid * m_ErlTid;                //!< erlang handle for this thread
     volatile uint32_t m_Available;       //!< 1 if thread waiting, using standard type for atomic operation
-    class eleveldb_thread_pool & m_Pool; //!< parent pool object
-    volatile eleveldb::WorkTask * m_DirectWork; //!< work passed direct to thread
+    class erocksdb_thread_pool & m_Pool; //!< parent pool object
+    volatile erocksdb::WorkTask * m_DirectWork; //!< work passed direct to thread
 
     pthread_mutex_t m_Mutex;             //!< mutex for condition variable
     pthread_cond_t m_Condition;          //!< condition for thread waiting
 
 
-    ThreadData(class eleveldb_thread_pool & Pool)
+    ThreadData(class erocksdb_thread_pool & Pool)
     : m_ErlTid(NULL), m_Available(0), m_Pool(Pool), m_DirectWork(NULL)
     {
         pthread_mutex_init(&m_Mutex, NULL);
@@ -70,8 +70,8 @@ private:
 
 
 bool                           // returns true if available worker thread found and claimed
-eleveldb_thread_pool::FindWaitingThread(
-    eleveldb::WorkTask * work) // non-NULL to pass current work directly to a thread,
+erocksdb_thread_pool::FindWaitingThread(
+    erocksdb::WorkTask * work) // non-NULL to pass current work directly to a thread,
                                // NULL to potentially nudge an available worker toward backlog queue
  {
      bool ret_flag;
@@ -92,7 +92,7 @@ eleveldb_thread_pool::FindWaitingThread(
          {
              // perform expensive compare and swap to potentially
              //  claim worker thread (this is an exclusive claim to the worker)
-             ret_flag = eleveldb::compare_and_swap(&threads[index]->m_Available, 1, 0);
+             ret_flag = erocksdb::compare_and_swap(&threads[index]->m_Available, 1, 0);
 
              // the compare/swap only succeeds if worker thread is sitting on
              //  pthread_cond_wait ... or is about to be there but is holding
@@ -120,7 +120,7 @@ eleveldb_thread_pool::FindWaitingThread(
  }   // FindWaitingThread
 
 
- bool eleveldb_thread_pool::submit(eleveldb::WorkTask* item)
+ bool erocksdb_thread_pool::submit(erocksdb::WorkTask* item)
  {
      bool ret_flag(false);
 
@@ -139,19 +139,17 @@ eleveldb_thread_pool::FindWaitingThread(
          {
              // no waiting threads, put on backlog queue
              lock();
-             eleveldb::inc_and_fetch(&work_queue_atomic);
+             erocksdb::inc_and_fetch(&work_queue_atomic);
              work_queue.push_back(item);
              unlock();
 
              // to address race condition, thread might be waiting now
              FindWaitingThread(NULL);
 
-             perf()->Inc(leveldb::ePerfElevelQueued);
              ret_flag=true;
          }   // if
          else
          {
-             perf()->Inc(leveldb::ePerfElevelDirect);
              ret_flag=true;
          }   // else
      }   // if
@@ -161,9 +159,9 @@ eleveldb_thread_pool::FindWaitingThread(
  }   // submit
 
   // not clear that this works or is testable
- bool eleveldb_thread_pool::resize_thread_pool(const size_t n)
+ bool erocksdb_thread_pool::resize_thread_pool(const size_t n)
  {
-     eleveldb::MutexLock l(thread_resize_pool_mutex);
+     erocksdb::MutexLock l(thread_resize_pool_mutex);
 
     if(0 == n)
      return false;
@@ -182,7 +180,7 @@ eleveldb_thread_pool::FindWaitingThread(
  }
 
 
-eleveldb_thread_pool::eleveldb_thread_pool(const size_t thread_pool_size)
+erocksdb_thread_pool::erocksdb_thread_pool(const size_t thread_pool_size)
     : work_queue_pending(0), work_queue_lock(0),
       work_queue_atomic(0),
       shutdown(false)
@@ -200,7 +198,7 @@ eleveldb_thread_pool::eleveldb_thread_pool(const size_t thread_pool_size)
         throw std::runtime_error("cannot resize thread pool");
 }
 
-eleveldb_thread_pool::~eleveldb_thread_pool()
+erocksdb_thread_pool::~erocksdb_thread_pool()
 {
     drain_thread_pool();   // all kids out of the pool
 
@@ -211,9 +209,9 @@ eleveldb_thread_pool::~eleveldb_thread_pool()
 
 // Grow the thread pool by nthreads threads:
 //  may not work at this time ...
-bool eleveldb_thread_pool::grow_thread_pool(const size_t nthreads)
+bool erocksdb_thread_pool::grow_thread_pool(const size_t nthreads)
 {
-    eleveldb::MutexLock l(threads_lock);
+    erocksdb::MutexLock l(threads_lock);
     ThreadData * new_thread;
 
     if(0 >= nthreads)
@@ -230,7 +228,7 @@ bool eleveldb_thread_pool::grow_thread_pool(const size_t nthreads)
     for(size_t i = nthreads; i; --i)
     {
         std::ostringstream thread_name;
-        thread_name << "eleveldb_write_thread_" << threads.size() + 1;
+        thread_name << "erocksdb_write_thread_" << threads.size() + 1;
 
         ErlNifTid *thread_id = static_cast<ErlNifTid *>(enif_alloc(sizeof(ErlNifTid)));
 
@@ -240,7 +238,7 @@ bool eleveldb_thread_pool::grow_thread_pool(const size_t nthreads)
         new_thread=new ThreadData(*this);
 
         const int result = enif_thread_create(const_cast<char *>(thread_name.str().c_str()), thread_id,
-                                              eleveldb_write_thread_worker,
+                                              erocksdb_write_thread_worker,
                                               static_cast<void *>(new_thread),
                                               0);
 
@@ -259,7 +257,7 @@ bool eleveldb_thread_pool::grow_thread_pool(const size_t nthreads)
 
 // Shut down and destroy all threads in the thread pool:
 //   does not currently work
-bool eleveldb_thread_pool::drain_thread_pool()
+bool erocksdb_thread_pool::drain_thread_pool()
 {
     struct release_thread
     {
@@ -284,7 +282,7 @@ bool eleveldb_thread_pool::drain_thread_pool()
     shutdown = true;
     enif_cond_broadcast(work_queue_pending);
 
-    eleveldb::MutexLock l(threads_lock);
+    erocksdb::MutexLock l(threads_lock);
 #if 0
     while(!threads.empty())
     {
@@ -299,14 +297,14 @@ bool eleveldb_thread_pool::drain_thread_pool()
     return rt();
 }
 
-bool eleveldb_thread_pool::notify_caller(eleveldb::WorkTask& work_item)
+bool erocksdb_thread_pool::notify_caller(erocksdb::WorkTask& work_item)
 {
     ErlNifPid pid;
     bool ret_flag(true);
 
 
     // Call the work function:
-    basho::async_nif::work_result result = work_item();
+    leofs::async_nif::work_result result = work_item();
 
     if (result.is_set())
     {
@@ -334,11 +332,11 @@ bool eleveldb_thread_pool::notify_caller(eleveldb::WorkTask& work_item)
  *  B. processing work passed by Erlang thread: m_Available=0, m_DirectWork=<non-null>
  *  C. processing backlog queue of work: m_Available=0, m_DirectWork=NULL
  */
-void *eleveldb_write_thread_worker(void *args)
+void *erocksdb_write_thread_worker(void *args)
 {
     ThreadData &tdata = *(ThreadData *)args;
-    eleveldb_thread_pool& h = tdata.m_Pool;
-    eleveldb::WorkTask * submission;
+    erocksdb_thread_pool& h = tdata.m_Pool;
+    erocksdb::WorkTask * submission;
 
     submission=NULL;
 
@@ -357,8 +355,7 @@ void *eleveldb_write_thread_worker(void *args)
                 {
                     submission=h.work_queue.front();
                     h.work_queue.pop_front();
-                    eleveldb::dec_and_fetch(&h.work_queue_atomic);
-                    h.perf()->Inc(leveldb::ePerfElevelDequeued);
+                    erocksdb::dec_and_fetch(&h.work_queue_atomic);
                 }   // if
 
                 h.unlock();
@@ -370,7 +367,7 @@ void *eleveldb_write_thread_worker(void *args)
         //  then loop to test queue again
         if (NULL!=submission)
         {
-            eleveldb_thread_pool::notify_caller(*submission);
+            erocksdb_thread_pool::notify_caller(*submission);
             if (submission->resubmit())
             {
                 submission->recycle();
@@ -400,7 +397,7 @@ void *eleveldb_write_thread_worker(void *args)
 	    }    // if
 
             tdata.m_Available=0;    // safety
-            submission=(eleveldb::WorkTask *)tdata.m_DirectWork; // NULL is valid
+            submission=(erocksdb::WorkTask *)tdata.m_DirectWork; // NULL is valid
             tdata.m_DirectWork=NULL;// safety
 
             pthread_mutex_unlock(&tdata.m_Mutex);
@@ -409,6 +406,6 @@ void *eleveldb_write_thread_worker(void *args)
 
     return 0;
 
-}   // eleveldb_write_thread_worker
+}   // erocksdb_write_thread_worker
 
-};  // namespace eleveldb
+};  // namespace erocksdb

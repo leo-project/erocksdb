@@ -24,17 +24,16 @@
 
 #include <deque>
 #include <vector>
-#include "leveldb/perf_count.h"
 
 #ifndef INCL_MUTEX_H
     #include "mutex.h"
 #endif
 
-#ifndef INCL_ELEVELDB_H
-    #include "eleveldb.h"
+#ifndef INCL_EROCKSDB_H
+    #include "erocksdb.h"
 #endif
 
-namespace eleveldb {
+namespace erocksdb {
 
 // constant
 const size_t N_THREADS_MAX = 32767;
@@ -44,24 +43,24 @@ struct ThreadData;
 class WorkTask;
 
 
-class eleveldb_thread_pool
+class erocksdb_thread_pool
 {
-    friend void *eleveldb_write_thread_worker(void *args);
+    friend void *erocksdb_write_thread_worker(void *args);
 
 private:
-    eleveldb_thread_pool(const eleveldb_thread_pool&);             // nocopy
-    eleveldb_thread_pool& operator=(const eleveldb_thread_pool&);  // nocopyassign
+    erocksdb_thread_pool(const erocksdb_thread_pool&);             // nocopy
+    erocksdb_thread_pool& operator=(const erocksdb_thread_pool&);  // nocopyassign
 
 protected:
 
-    typedef std::deque<eleveldb::WorkTask*> work_queue_t;
+    typedef std::deque<erocksdb::WorkTask*> work_queue_t;
     // typedef std::stack<ErlNifTid *>            thread_pool_t;
     typedef std::vector<ThreadData *>   thread_pool_t;
 
 private:
     thread_pool_t  threads;
-    eleveldb::Mutex threads_lock;       // protect resizing of the thread pool
-    eleveldb::Mutex thread_resize_pool_mutex;
+    erocksdb::Mutex threads_lock;       // protect resizing of the thread pool
+    erocksdb::Mutex thread_resize_pool_mutex;
 
     work_queue_t   work_queue;
     ErlNifCond*    work_queue_pending; // flags job present in the work queue
@@ -71,33 +70,31 @@ private:
     volatile bool  shutdown;           // should we stop threads and shut down?
 
 public:
-    eleveldb_thread_pool(const size_t thread_pool_size);
-    ~eleveldb_thread_pool();
+    erocksdb_thread_pool(const size_t thread_pool_size);
+    ~erocksdb_thread_pool();
 
 public:
     void lock()                    { enif_mutex_lock(work_queue_lock); }
     void unlock()                  { enif_mutex_unlock(work_queue_lock); }
 
-    bool FindWaitingThread(eleveldb::WorkTask * work);
+    bool FindWaitingThread(erocksdb::WorkTask * work);
 
-    bool submit(eleveldb::WorkTask* item);
+    bool submit(erocksdb::WorkTask* item);
 
     bool resize_thread_pool(const size_t n);
 
     size_t work_queue_size() const { return work_queue.size(); }
     bool shutdown_pending() const  { return shutdown; }
-    leveldb::PerformanceCounters * perf() const {return(leveldb::gPerfCounters);};
-
 
 private:
     bool grow_thread_pool(const size_t nthreads);
     bool drain_thread_pool();
 
-    static bool notify_caller(eleveldb::WorkTask& work_item);
+    static bool notify_caller(erocksdb::WorkTask& work_item);
 
-};  // class eleveldb_thread_pool
+};  // class erocksdb_thread_pool
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 
 #endif  // INCL_THREADING_H

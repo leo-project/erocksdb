@@ -29,7 +29,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--define(COMMON_INSTANCE_DIR, "/tmp/eleveldb.cleanup.test").
+-define(COMMON_INSTANCE_DIR, "/tmp/erocksdb.cleanup.test").
 
 %% Purposely reopen an already opened database to test failure assumption
 assumption_test() ->
@@ -40,14 +40,14 @@ assumption_test() ->
         io:format(user, "assumption_test: bottom\n", []),
         ok
     after
-        eleveldb:close(DB),
+        erocksdb:close(DB),
         timer:sleep(500)
     end.
 
 %% Open/close
 open_close_test() ->
     DB = open(),
-    eleveldb:close(DB),
+    erocksdb:close(DB),
     check().
 
 %% Open w/o close
@@ -63,14 +63,14 @@ iterator_test() ->
     DB = open(),
     try
         write(100, DB),
-        {ok, Itr} = eleveldb:iterator(DB, []),
+        {ok, Itr} = erocksdb:iterator(DB, []),
         iterate(Itr),
-        eleveldb:iterator_close(Itr),
-        eleveldb:close(DB),
+        erocksdb:iterator_close(Itr),
+        erocksdb:close(DB),
         check(),
         ok
     after
-        catch eleveldb:close(DB),
+        catch erocksdb:close(DB),
         timer:sleep(500)
     end.
 
@@ -84,7 +84,7 @@ iterator_db_close_test() ->
         write(100, DB),
         Parent = self(),
         spawn_monitor(fun() ->
-                              {ok, Itr} = eleveldb:iterator(DB, []),
+                              {ok, Itr} = erocksdb:iterator(DB, []),
                               Parent ! continue,
                               try
                                   iterate(Itr, 10)
@@ -93,14 +93,14 @@ iterator_db_close_test() ->
                                       ok
                               end,
                               try
-                                  eleveldb:iterator_close(Itr)
+                                  erocksdb:iterator_close(Itr)
                               catch
                                   error:badarg ->
                                       ok
                               end
                       end),
         receive continue -> ok end,
-        eleveldb:close(DB),
+        erocksdb:close(DB),
         %%failed_open(),
         wait_down(),
         erlang:garbage_collect(),
@@ -108,7 +108,7 @@ iterator_db_close_test() ->
         check(),
         ok
     after
-        catch eleveldb:close(DB),
+        catch erocksdb:close(DB),
         timer:sleep(500)
     end.
 
@@ -118,14 +118,14 @@ iterator_exit_test() ->
     try
         write(100, DB),
         spawn_wait(fun() ->
-                           {ok, Itr} = eleveldb:iterator(DB, []),
+                           {ok, Itr} = erocksdb:iterator(DB, []),
                            iterate(Itr)
                    end),
-        eleveldb:close(DB),
+        erocksdb:close(DB),
         check(),
         ok
     after
-        catch eleveldb:close(DB),
+        catch erocksdb:close(DB),
         timer:sleep(500)
     end.
 
@@ -141,18 +141,18 @@ wait_down() ->
 check() ->
     timer:sleep(500),
     DB = open(),
-    eleveldb:close(DB),
+    erocksdb:close(DB),
     timer:sleep(500),
     ok.
 
 open() ->
-    {ok, Ref} = eleveldb:open(?COMMON_INSTANCE_DIR,
-                              [{create_if_missing, true}]),
+    {ok, Ref} = erocksdb:open(?COMMON_INSTANCE_DIR,
+                              [{create_if_missing, true}], []),
     Ref.
 
 failed_open() ->
-    {error, {db_open, _}} = eleveldb:open(?COMMON_INSTANCE_DIR,
-                                          [{create_if_missing, true}]),
+    {error, {db_open, _}} = erocksdb:open(?COMMON_INSTANCE_DIR,
+                                          [{create_if_missing, true}], []),
     ok.
 
 write(N, DB) ->
@@ -160,13 +160,13 @@ write(N, DB) ->
 write(Same, Same, _DB) ->
     ok;
 write(N, End, DB) ->
-    eleveldb:put(DB, <<N:64/integer>>, <<N:64/integer>>, []),
+    erocksdb:put(DB, <<N:64/integer>>, <<N:64/integer>>, []),
     write(N+1, End, DB).
 
 iterate(Itr) ->
     iterate(Itr, 0).
 iterate(Itr, Delay) ->
-    do_iterate(eleveldb:iterator_move(Itr, <<0:64/integer>>), {Itr, 0, Delay}).
+    do_iterate(erocksdb:iterator_move(Itr, <<0:64/integer>>), {Itr, 0, Delay}).
 
 do_iterate({error, invalid_iterator}, _) ->
     ok;
@@ -174,5 +174,5 @@ do_iterate({ok, K, _V}, {Itr, Expected, Delay}) ->
     <<N:64/integer>> = K,
     ?assertEqual(Expected, N),
     (Delay == 0) orelse timer:sleep(Delay),
-    do_iterate(eleveldb:iterator_move(Itr, next),
+    do_iterate(erocksdb:iterator_move(Itr, next),
                {Itr, Expected + 1, Delay}).

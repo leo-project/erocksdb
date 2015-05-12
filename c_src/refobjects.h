@@ -26,9 +26,8 @@
 #include <stdint.h>
 #include <list>
 
-#include "leveldb/db.h"
-#include "leveldb/write_batch.h"
-#include "leveldb/perf_count.h"
+#include "rocksdb/db.h"
+#include "rocksdb/write_batch.h"
 
 #ifndef INCL_THREADING_H
     #include "threading.h"
@@ -43,7 +42,7 @@
 #endif
 
 
-namespace eleveldb {
+namespace erocksdb {
 
 /**
  * Base class for any object that offers RefInc / RefDec interface
@@ -175,9 +174,9 @@ private:
 class DbObject : public ErlRefObject
 {
 public:
-    leveldb::DB* m_Db;                                   // NULL or leveldb database object
+    rocksdb::DB* m_Db;                                   // NULL or rocksdb database object
 
-    leveldb::Options * m_DbOptions;
+    rocksdb::Options *m_DbOptions;
 
     Mutex m_ItrMutex;                         //!< mutex protecting m_ItrList
     std::list<class ItrObject *> m_ItrList;   //!< ItrObjects holding ref count to this
@@ -186,7 +185,7 @@ protected:
     static ErlNifResourceType* m_Db_RESOURCE;
 
 public:
-    DbObject(leveldb::DB * DbPtr, leveldb::Options * Options);
+    DbObject(rocksdb::DB * DbPtr, rocksdb::Options * Options); // Open with default CF
 
     virtual ~DbObject();
 
@@ -199,7 +198,7 @@ public:
 
     static void CreateDbObjectType(ErlNifEnv * Env);
 
-    static DbObject * CreateDbObject(leveldb::DB * Db, leveldb::Options * DbOptions);
+    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::Options* Options);
 
     static DbObject * RetrieveDbObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm);
 
@@ -213,97 +212,97 @@ private:
 
 
 /**
- * A self deleting wrapper to contain leveldb snapshot pointer.
- *   Needed because multiple LevelIteratorWrappers could be using
+ * A self deleting wrapper to contain rocksdb snapshot pointer.
+ *   Needed because multiple RocksIteratorWrappers could be using
  *   it ... and finishing at different times.
  */
 
-class LevelSnapshotWrapper : public RefObject
+class RocksSnapshotWrapper : public RefObject
 {
 public:
     ReferencePtr<DbObject> m_DbPtr;  //!< need to keep db open for delete of this object
-    const leveldb::Snapshot * m_Snapshot;
+    const rocksdb::Snapshot * m_Snapshot;
 
     // this is an odd place to put this info, but it
     //  happens to have the exact same lifespan
     ERL_NIF_TERM itr_ref;
     ErlNifEnv *itr_ref_env;
 
-    LevelSnapshotWrapper(DbObject * DbPtr, const leveldb::Snapshot * Snapshot)
+    RocksSnapshotWrapper(DbObject * DbPtr, const rocksdb::Snapshot * Snapshot)
         : m_DbPtr(DbPtr), m_Snapshot(Snapshot), itr_ref_env(NULL)
     {
     };
 
-    virtual ~LevelSnapshotWrapper()
+    virtual ~RocksSnapshotWrapper()
     {
         if (NULL!=itr_ref_env)
             enif_free_env(itr_ref_env);
 
         if (NULL!=m_Snapshot)
         {
-            // leveldb performs actual "delete" call on m_Shapshot's pointer
+            // rocksdb performs actual "delete" call on m_Shapshot's pointer
             m_DbPtr->m_Db->ReleaseSnapshot(m_Snapshot);
             m_Snapshot=NULL;
         }   // if
-    }   // ~LevelSnapshotWrapper
+    }   // ~RocksSnapshotWrapper
 
-    const leveldb::Snapshot * get() {return(m_Snapshot);};
-    const leveldb::Snapshot * operator->() {return(m_Snapshot);};
+    const rocksdb::Snapshot * get() {return(m_Snapshot);};
+    const rocksdb::Snapshot * operator->() {return(m_Snapshot);};
 
 private:
-    LevelSnapshotWrapper(const LevelSnapshotWrapper &);            // no copy
-    LevelSnapshotWrapper& operator=(const LevelSnapshotWrapper &); // no assignment
+    RocksSnapshotWrapper(const RocksSnapshotWrapper &);            // no copy
+    RocksSnapshotWrapper& operator=(const RocksSnapshotWrapper &); // no assignment
 
-};  // LevelSnapshotWrapper
+};  // RocksSnapshotWrapper
 
 
 
 /**
- * A self deleting wrapper to contain leveldb iterator.
+ * A self deleting wrapper to contain rocksdb iterator.
  *   Used when an ItrObject needs to skip around and might
  *   have a background MoveItem performing a prefetch on existing
  *   iterator.
  */
 
-class LevelIteratorWrapper : public RefObject
+class RocksIteratorWrapper : public RefObject
 {
 public:
     ReferencePtr<DbObject> m_DbPtr;           //!< need to keep db open for delete of this object
-    ReferencePtr<LevelSnapshotWrapper> m_Snap;//!< keep snapshot active while this object is
-    leveldb::Iterator * m_Iterator;
+    ReferencePtr<RocksSnapshotWrapper> m_Snap;//!< keep snapshot active while this object is
+    rocksdb::Iterator * m_Iterator;
     volatile uint32_t m_HandoffAtomic;        //!< matthew's atomic foreground/background prefetch flag.
     bool m_KeysOnly;                          //!< only return key values
     bool m_PrefetchStarted;                   //!< true after first prefetch command
 
-    LevelIteratorWrapper(DbObject * DbPtr, LevelSnapshotWrapper * Snapshot,
-                         leveldb::Iterator * Iterator, bool KeysOnly)
+    RocksIteratorWrapper(DbObject * DbPtr, RocksSnapshotWrapper * Snapshot,
+                         rocksdb::Iterator * Iterator, bool KeysOnly)
         : m_DbPtr(DbPtr), m_Snap(Snapshot), m_Iterator(Iterator),
         m_HandoffAtomic(0), m_KeysOnly(KeysOnly), m_PrefetchStarted(false)
     {
     };
 
-    virtual ~LevelIteratorWrapper()
+    virtual ~RocksIteratorWrapper()
     {
         if (NULL!=m_Iterator)
         {
             delete m_Iterator;
             m_Iterator=NULL;
         }   // if
-    }   // ~LevelIteratorWrapper
+    }   // ~RocksIteratorWrapper
 
-    leveldb::Iterator * get() {return(m_Iterator);};
-    leveldb::Iterator * operator->() {return(m_Iterator);};
+    rocksdb::Iterator * get() {return(m_Iterator);};
+    rocksdb::Iterator * operator->() {return(m_Iterator);};
 
     bool Valid() {return(m_Iterator->Valid());};
-    leveldb::Slice key() {return(m_Iterator->key());};
-    leveldb::Slice value() {return(m_Iterator->value());};
+    rocksdb::Slice key() {return(m_Iterator->key());};
+    rocksdb::Slice value() {return(m_Iterator->value());};
 
 private:
-    LevelIteratorWrapper(const LevelIteratorWrapper &);            // no copy
-    LevelIteratorWrapper& operator=(const LevelIteratorWrapper &); // no assignment
+    RocksIteratorWrapper(const RocksIteratorWrapper &);            // no copy
+    RocksIteratorWrapper& operator=(const RocksIteratorWrapper &); // no assignment
 
 
-};  // LevelIteratorWrapper
+};  // RocksIteratorWrapper
 
 
 
@@ -313,11 +312,11 @@ private:
 class ItrObject : public ErlRefObject
 {
 public:
-    ReferencePtr<LevelIteratorWrapper> m_Iter;
-    ReferencePtr<LevelSnapshotWrapper> m_Snapshot;
+    ReferencePtr<RocksIteratorWrapper> m_Iter;
+    ReferencePtr<RocksSnapshotWrapper> m_Snapshot;
 
     bool keys_only;
-    leveldb::ReadOptions * m_ReadOptions;
+    rocksdb::ReadOptions * m_ReadOptions;
 
     volatile class MoveTask * reuse_move;//!< iterator work object that is reused instead of lots malloc/free
 
@@ -327,7 +326,7 @@ protected:
     static ErlNifResourceType* m_Itr_RESOURCE;
 
 public:
-    ItrObject(DbObject *, bool, leveldb::ReadOptions *);
+    ItrObject(DbObject *, bool, rocksdb::ReadOptions *);
 
     virtual ~ItrObject(); // needs to perform free_itr
 
@@ -335,7 +334,7 @@ public:
 
     static void CreateItrObjectType(ErlNifEnv * Env);
 
-    static ItrObject * CreateItrObject(DbObject * Db, bool KeysOnly, leveldb::ReadOptions * Options);
+    static ItrObject * CreateItrObject(DbObject * Db, bool KeysOnly, rocksdb::ReadOptions * Options);
 
     static ItrObject * RetrieveItrObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm,
                                          bool ItrClosing=false);
@@ -350,7 +349,7 @@ private:
     ItrObject & operator=(const ItrObject &); // no assignment
 };  // class ItrObject
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 
 #endif  // INCL_REFOBJECTS_H

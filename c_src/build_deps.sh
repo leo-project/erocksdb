@@ -8,9 +8,9 @@ if [ `uname -s` = 'SunOS' -a "${POSIX_SHELL}" != "true" ]; then
 fi
 unset POSIX_SHELL # clear it so if we invoke other scripts, they run as ksh as well
 
-LEVELDB_VSN="1.4.10"
+ROCKSDB_VSN="rocksdb-3.8"
 
-SNAPPY_VSN="1.0.4"
+SNAPPY_VSN="1.1.1"
 
 set -e
 
@@ -32,13 +32,13 @@ MAKE=${MAKE:-make}
 
 case "$1" in
     rm-deps)
-        rm -rf leveldb system snappy-$SNAPPY_VSN
+        rm -rf rocksdb system snappy-$SNAPPY_VSN
         ;;
 
     clean)
         rm -rf system snappy-$SNAPPY_VSN
-        if [ -d leveldb ]; then
-            (cd leveldb && $MAKE clean)
+        if [ -d rocksdb ]; then
+            (cd rocksdb && $MAKE clean)
         fi
         ;;
 
@@ -46,16 +46,16 @@ case "$1" in
         export CFLAGS="$CFLAGS -I $BASEDIR/system/include"
         export CXXFLAGS="$CXXFLAGS -I $BASEDIR/system/include"
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
-        export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
+        export LD_LIBRARY_PATH="$BASEDIR/rocksdb:$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        (cd leveldb && $MAKE check)
+        (cd rocksdb && $MAKE ldb_tests)
 
         ;;
 
     get-deps)
-        if [ ! -d leveldb ]; then
-            git clone git://github.com/basho/leveldb
-            (cd leveldb && git checkout $LEVELDB_VSN)
+        if [ ! -d rocksdb ]; then
+            git clone git://github.com/facebook/rocksdb
+            (cd rocksdb && git checkout $ROCKSDB_VSN)
         fi
         ;;
 
@@ -72,12 +72,12 @@ case "$1" in
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        if [ ! -d leveldb ]; then
-            git clone git://github.com/basho/leveldb
-            (cd leveldb && git checkout $LEVELDB_VSN)
+        if [ ! -d rocksdb ]; then
+            git clone git://github.com/facebook/rocksdb
+            (cd rocksdb && git checkout $ROCKSDB_VSN)
         fi
-
-        (cd leveldb && $MAKE all)
-
+        if [ ! -f rocksdb/librocksdb.a ]; then
+            (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
+        fi
         ;;
 esac

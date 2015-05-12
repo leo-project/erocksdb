@@ -19,7 +19,7 @@
 %% under the License.
 %%
 %% -------------------------------------------------------------------
--module(eleveldb_bump).
+-module(erocksdb_bump).
 
 -export([big/0, small/0]).
 

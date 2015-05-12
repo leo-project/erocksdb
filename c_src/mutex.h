@@ -24,7 +24,7 @@
 
 #include <pthread.h>
 
-namespace eleveldb {
+namespace erocksdb {
 
 
 /**
@@ -79,7 +79,7 @@ private:
     MutexLock & operator=(const MutexLock & rhs); // no assignment constructor
 };  // class MutexLock
 
-} // namespace eleveldb
+} // namespace erocksdb
 
 
 #endif  // INCL_MUTEX_H

@@ -18,3 +18,6 @@ Passed all the tests derived from [eleveldb](https://github.com/basho/eleveldb)
 
 erocksdb's license is [Apache License Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)
 
+## Codebase
+
+This code is based on [basho’s eleveldb](https://github.com/basho/eleveldb)

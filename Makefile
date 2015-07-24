@@ -1,4 +1,4 @@
-BUILD_CONFIG = build_config.mk
+BUILD_CONFIG = make_config.mk
 
 all: compile
 

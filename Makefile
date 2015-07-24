@@ -1,3 +1,4 @@
+BUILD_CONFIG = build_config.mk
 
 all: compile
 
@@ -8,7 +9,8 @@ rm-deps:
 	./c_src/build_deps.sh rm-deps
 
 compile:
-	./rebar compile
+	./c_src/build_deps.sh
+	PLATFORM_LDFLAGS="`cat c_src/rocksdb/${BUILD_CONFIG} |grep PLATFORM_LDFLAGS| awk -F= '{print $$2}'`" ./rebar compile
 
 test: compile
 	./rebar eunit

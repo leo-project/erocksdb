@@ -1,9 +1,9 @@
 erocksdb
 ========
 
-Erlang bindings to [RocksDB](https://github.com/facebook/rocksdb) datastore 
+[![Build Status](https://travis-ci.org/leo-project/erocksdb.svg?branch=develop)](http://travis-ci.org/leo-project/erocksdb)
 
-[![Build Status](https://secure.travis-ci.org/leo-project/erocksdb.png?branch=master)](http://travis-ci.org/leo-project/erocksdb)
+Erlang bindings to [RocksDB](https://github.com/facebook/rocksdb) datastore.
 
 ## Build Information
 
@@ -20,4 +20,8 @@ erocksdb's license is [Apache License Version 2.0](http://www.apache.org/license
 
 ## Codebase
 
-This code is based on [basho’s eleveldb](https://github.com/basho/eleveldb)
+This code is based on [basho’s eleveldb](https://github.com/basho/eleveldb).
+
+## Sponsors
+
+LeoProject/LeoFS is sponsored by [Rakuten, Inc.](http://global.rakuten.com/corp/) and suppoerted by [Rakuten Institute of Technology](http://rit.rakuten.co.jp/).

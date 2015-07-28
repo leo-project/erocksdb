@@ -1,6 +1,6 @@
 BUILD_CONFIG = make_config.mk
 
-all: compile
+all: compile test
 
 get-deps:
 	./c_src/build_deps.sh get-deps

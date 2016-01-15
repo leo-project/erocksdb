@@ -42,6 +42,7 @@
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/utilities/backupable_db.h"
 
 #ifndef INCL_THREADING_H
     #include "threading.h"
@@ -67,6 +68,8 @@ static ErlNifFunc nif_funcs[] =
     {"destroy", 2, erocksdb_destroy},
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
+    {"backup", 2, erocksdb_backup},
+    {"restore", 2, erocksdb_restore},
 
     {"async_open", 4, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
@@ -172,7 +175,7 @@ ERL_NIF_TERM ATOM_DISABLE_WAL;
 ERL_NIF_TERM ATOM_TIMEOUT_HINT_US;
 ERL_NIF_TERM ATOM_IGNORE_MISSING_COLUMN_FAMILIES;
 
-// Related to Write Actions 
+// Related to Write Actions
 ERL_NIF_TERM ATOM_CLEAR;
 ERL_NIF_TERM ATOM_PUT;
 ERL_NIF_TERM ATOM_DELETE;
@@ -217,6 +220,8 @@ ERL_NIF_TERM ATOM_BAD_WRITE_ACTION;
 ERL_NIF_TERM ATOM_KEEP_RESOURCE_FAILED;
 ERL_NIF_TERM ATOM_ITERATOR_CLOSED;
 ERL_NIF_TERM ATOM_INVALID_ITERATOR;
+ERL_NIF_TERM ATOM_ERROR_DB_BACKUP;
+ERL_NIF_TERM ATOM_ERROR_DB_RESTORE;
 
 // Related to NIF initialize parameters
 ERL_NIF_TERM ATOM_WRITE_THREADS;
@@ -362,7 +367,7 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             ERL_NIF_TERM tail;
             char db_name[4096];
             while(enif_get_list_cell(env, option[1], &head, &tail)) {
-                if (enif_get_string(env, head, db_name, sizeof(db_name), ERL_NIF_LATIN1)) 
+                if (enif_get_string(env, head, db_name, sizeof(db_name), ERL_NIF_LATIN1))
                 {
                     std::string str_db_name(db_name);
                     rocksdb::DbPath db_path(str_db_name, 0);
@@ -515,7 +520,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
     if (enif_get_tuple(env, item, &arity, &option) && 2==arity)
     {
         if (option[0] == erocksdb::ATOM_BLOCK_CACHE_SIZE_MB_FOR_POINT_LOOKUP)
-            // @TODO ignored now 
+            // @TODO ignored now
             ;
         else if (option[0] == erocksdb::ATOM_MEMTABLE_MEMORY_BUDGET)
         {
@@ -741,7 +746,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
     }
     return erocksdb::ATOM_OK;
 }
- 
+
 ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadOptions& opts)
 {
     int arity;
@@ -1186,6 +1191,7 @@ async_iterator_move(
 } // namespace erocksdb
 
 
+
 /***
  * HEY YOU, please convert this to an async operation
  */
@@ -1402,6 +1408,104 @@ erocksdb_is_empty(
 }   // erocksdb_is_empty
 
 
+ERL_NIF_TERM
+erocksdb_backup(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+
+    erocksdb::DbObject * db_ptr;
+    ERL_NIF_TERM ret_term;
+
+    db_ptr=erocksdb::DbObject::RetrieveDbObject(env, argv[0]);
+
+    char backup_path[4096];
+
+    if(!enif_get_string(env, argv[1], backup_path, sizeof(backup_path), ERL_NIF_LATIN1))
+    {
+        return enif_make_badarg(env);
+    }
+
+    if (NULL!=db_ptr)
+    {
+        rocksdb::BackupEngine* backup_engine;
+        rocksdb::Status s = rocksdb::BackupEngine::Open(rocksdb::Env::Default(),
+                rocksdb::BackupableDBOptions(backup_path), &backup_engine);
+
+        if(!s.ok())
+        {
+            return  error_tuple(env, erocksdb::ATOM_ERROR_DB_BACKUP, s);
+        }
+
+
+        rocksdb::Status status = backup_engine->CreateNewBackup(db_ptr->m_Db);
+        if(!status.ok())
+        {
+            ret_term = error_tuple(env, erocksdb::ATOM_ERROR_DB_BACKUP, status);
+        }
+        else
+        {
+            ret_term=erocksdb::ATOM_OK;
+        }
+        delete backup_engine;
+    }
+    else
+    {
+        ret_term=enif_make_badarg(env);
+    }
+
+    return(ret_term);
+} // erocksdb_backup
+
+
+ERL_NIF_TERM
+erocksdb_restore(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+
+    ERL_NIF_TERM ret_term;
+
+    char db_path[4096];
+    char backup_path[4096];
+
+    if(!enif_get_string(env, argv[0], backup_path, sizeof(backup_path), ERL_NIF_LATIN1))
+    {
+        return enif_make_badarg(env);
+    }
+
+    if(!enif_get_string(env, argv[1], db_path, sizeof(db_path), ERL_NIF_LATIN1))
+    {
+        return enif_make_badarg(env);
+    }
+
+
+    rocksdb::BackupEngineReadOnly* backup_engine;
+    rocksdb::Status s = rocksdb::BackupEngineReadOnly::Open(rocksdb::Env::Default(),
+            rocksdb::BackupableDBOptions(backup_path), &backup_engine);
+
+    if(!s.ok())
+    {
+        return  error_tuple(env, erocksdb::ATOM_ERROR_DB_BACKUP, s);
+    }
+
+    rocksdb::Status status = backup_engine->RestoreDBFromLatestBackup(db_path, db_path);
+    delete backup_engine;
+
+    if(!status.ok())
+    {
+        ret_term = error_tuple(env, erocksdb::ATOM_ERROR_DB_RESTORE, status);
+    }
+    else
+    {
+        ret_term=erocksdb::ATOM_OK;
+    }
+    return(ret_term);
+} // erocksdb_restore
+
+
 static void on_unload(ErlNifEnv *env, void *priv_data)
 {
     erocksdb_priv_data *p = static_cast<erocksdb_priv_data *>(priv_data);
@@ -1558,6 +1662,9 @@ try
     ATOM(erocksdb::ATOM_KEEP_RESOURCE_FAILED, "keep_resource_failed");
     ATOM(erocksdb::ATOM_ITERATOR_CLOSED, "iterator_closed");
     ATOM(erocksdb::ATOM_INVALID_ITERATOR, "invalid_iterator");
+    ATOM(erocksdb::ATOM_ERROR_DB_BACKUP, "error_db_backup");
+    ATOM(erocksdb::ATOM_ERROR_DB_RESTORE, "error_db_restore");
+
 
     // Related to NIF initialize parameters
     ATOM(erocksdb::ATOM_WRITE_THREADS, "write_threads");

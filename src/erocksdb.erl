@@ -30,6 +30,7 @@
 -export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
+-export([backup/2, restore/2]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 
 -export_type([db_handle/0,
@@ -454,6 +455,18 @@ destroy(_Name, _DBOpts) ->
              ok | {error, any()} when Name::file:filename_all(),
                                       DBOpts::db_options()).
 repair(_Name, _DBOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc backup a database
+-spec backup(DbHandle::db_handle(), BackupPath::file:filename_all())
+    -> ok | {error, error_db_backup}.
+backup(_DbHandle, _BackupPath) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc restore a database from last backup
+-spec restore(BackupPath::file:filename_all(), DbPath::file:filename_all())
+    -> ok | {error, error_db_restore}.
+restore(_BackupPath, _DbPath) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc

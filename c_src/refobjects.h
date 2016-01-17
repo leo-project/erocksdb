@@ -179,7 +179,9 @@ public:
     rocksdb::Options *m_DbOptions;
 
     Mutex m_ItrMutex;                         //!< mutex protecting m_ItrList
+    Mutex m_SnapshotMutex;                    //!< mutext protecting m_SnapshotList
     std::list<class ItrObject *> m_ItrList;   //!< ItrObjects holding ref count to this
+    std::list<class SnapshotObject *> m_SnapshotList;
 
 protected:
     static ErlNifResourceType* m_Db_RESOURCE;
@@ -196,9 +198,14 @@ public:
 
     void RemoveReference(class ItrObject *);
 
+     // manual back link to Snapshot DbObjects holding reference to this
+    void AddSnapshotReference(class SnapshotObject *);
+
+    void RemoveSnapshotReference(class SnapshotObject *);
+
     static void CreateDbObjectType(ErlNifEnv * Env);
 
-    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::Options* Options);
+    static DbObject * CreateDbObject(rocksdb::DB * Db, rocksdb::Options * Options);
 
     static DbObject * RetrieveDbObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm);
 
@@ -212,49 +219,41 @@ private:
 
 
 /**
- * A self deleting wrapper to contain rocksdb snapshot pointer.
- *   Needed because multiple RocksIteratorWrappers could be using
- *   it ... and finishing at different times.
+ * Per Snapshot object.  Created as erlang reference.
  */
-
-class RocksSnapshotWrapper : public RefObject
+class SnapshotObject : public ErlRefObject
 {
 public:
-    ReferencePtr<DbObject> m_DbPtr;  //!< need to keep db open for delete of this object
-    const rocksdb::Snapshot * m_Snapshot;
+    const rocksdb::Snapshot* m_Snapshot;
 
-    // this is an odd place to put this info, but it
-    //  happens to have the exact same lifespan
-    ERL_NIF_TERM itr_ref;
-    ErlNifEnv *itr_ref_env;
+    ReferencePtr<DbObject> m_DbPtr;
 
-    RocksSnapshotWrapper(DbObject * DbPtr, const rocksdb::Snapshot * Snapshot)
-        : m_DbPtr(DbPtr), m_Snapshot(Snapshot), itr_ref_env(NULL)
-    {
-    };
+    Mutex m_ItrMutex;                         //!< mutex protecting m_ItrList
+    std::list<class ItrObject *> m_ItrList;   //!< ItrObjects holding ref count to this
 
-    virtual ~RocksSnapshotWrapper()
-    {
-        if (NULL!=itr_ref_env)
-            enif_free_env(itr_ref_env);
+protected:
+    static ErlNifResourceType* m_DbSnapshot_RESOURCE;
 
-        if (NULL!=m_Snapshot)
-        {
-            // rocksdb performs actual "delete" call on m_Shapshot's pointer
-            m_DbPtr->m_Db->ReleaseSnapshot(m_Snapshot);
-            m_Snapshot=NULL;
-        }   // if
-    }   // ~RocksSnapshotWrapper
+public:
+    SnapshotObject(DbObject * Db, const rocksdb::Snapshot * Snapshot);
 
-    const rocksdb::Snapshot * get() {return(m_Snapshot);};
-    const rocksdb::Snapshot * operator->() {return(m_Snapshot);};
+    virtual ~SnapshotObject(); // needs to perform free_itr
+
+    virtual void Shutdown();
+
+    static void CreateSnapshotObjectType(ErlNifEnv * Env);
+
+    static SnapshotObject * CreateSnapshotObject(DbObject * Db, const rocksdb::Snapshot* Snapshot);
+
+    static SnapshotObject * RetrieveSnapshotObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm);
+
+    static void SnapshotObjectResourceCleanup(ErlNifEnv *Env, void * Arg);
 
 private:
-    RocksSnapshotWrapper(const RocksSnapshotWrapper &);            // no copy
-    RocksSnapshotWrapper& operator=(const RocksSnapshotWrapper &); // no assignment
-
-};  // RocksSnapshotWrapper
-
+    SnapshotObject();
+    SnapshotObject(const SnapshotObject &);            // no copy
+    SnapshotObject & operator=(const SnapshotObject &); // no assignment
+};  // class SnapshotObject
 
 
 /**
@@ -268,21 +267,27 @@ class RocksIteratorWrapper : public RefObject
 {
 public:
     ReferencePtr<DbObject> m_DbPtr;           //!< need to keep db open for delete of this object
-    ReferencePtr<RocksSnapshotWrapper> m_Snap;//!< keep snapshot active while this object is
     rocksdb::Iterator * m_Iterator;
     volatile uint32_t m_HandoffAtomic;        //!< matthew's atomic foreground/background prefetch flag.
     bool m_KeysOnly;                          //!< only return key values
     bool m_PrefetchStarted;                   //!< true after first prefetch command
 
-    RocksIteratorWrapper(DbObject * DbPtr, RocksSnapshotWrapper * Snapshot,
-                         rocksdb::Iterator * Iterator, bool KeysOnly)
-        : m_DbPtr(DbPtr), m_Snap(Snapshot), m_Iterator(Iterator),
-        m_HandoffAtomic(0), m_KeysOnly(KeysOnly), m_PrefetchStarted(false)
+    ERL_NIF_TERM itr_ref;
+    ErlNifEnv *itr_ref_env;
+
+    RocksIteratorWrapper(DbObject * DbPtr, rocksdb::Iterator * Iterator, bool KeysOnly)
+        : m_DbPtr(DbPtr), m_Iterator(Iterator), m_HandoffAtomic(0), 
+        m_KeysOnly(KeysOnly), m_PrefetchStarted(false), itr_ref_env(NULL)
     {
     };
 
     virtual ~RocksIteratorWrapper()
     {
+        if (NULL!=itr_ref_env)
+            enif_free_env(itr_ref_env);
+
+
+
         if (NULL!=m_Iterator)
         {
             delete m_Iterator;
@@ -304,8 +309,6 @@ private:
 
 };  // RocksIteratorWrapper
 
-
-
 /**
  * Per Iterator object.  Created as erlang reference.
  */
@@ -313,7 +316,6 @@ class ItrObject : public ErlRefObject
 {
 public:
     ReferencePtr<RocksIteratorWrapper> m_Iter;
-    ReferencePtr<RocksSnapshotWrapper> m_Snapshot;
 
     bool keys_only;
     rocksdb::ReadOptions * m_ReadOptions;
@@ -321,6 +323,7 @@ public:
     volatile class MoveTask * reuse_move;//!< iterator work object that is reused instead of lots malloc/free
 
     ReferencePtr<DbObject> m_DbPtr;
+
 
 protected:
     static ErlNifResourceType* m_Itr_RESOURCE;
@@ -334,7 +337,8 @@ public:
 
     static void CreateItrObjectType(ErlNifEnv * Env);
 
-    static ItrObject * CreateItrObject(DbObject * Db, bool KeysOnly, rocksdb::ReadOptions * Options);
+    static ItrObject * CreateItrObject(DbObject * Db, bool KeysOnly,
+                                       rocksdb::ReadOptions * Options);
 
     static ItrObject * RetrieveItrObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm,
                                          bool ItrClosing=false);

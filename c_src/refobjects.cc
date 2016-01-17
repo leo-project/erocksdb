@@ -217,7 +217,6 @@ DbObject::CreateDbObject(
 
     // the alloc call initializes the reference count to "one"
     alloc_ptr=enif_alloc_resource(m_Db_RESOURCE, sizeof(DbObject));
-
     ret_ptr=new (alloc_ptr) DbObject(Db, Options);
 
     // manual reference increase to keep active until "close" called
@@ -280,13 +279,12 @@ DbObject::DbObject(
     rocksdb::DB * DbPtr,
     rocksdb::Options * Options)
     : m_Db(DbPtr), m_DbOptions(Options)
-{
-}   // DbObject::DbObject
+    {}   // DbObject::DbObject
 
 
-// iterators should already be cleared since they hold a reference
 DbObject::~DbObject()
 {
+
     // close the db
     delete m_Db;
     m_Db=NULL;
@@ -296,6 +294,8 @@ DbObject::~DbObject()
         delete m_DbOptions;
         m_DbOptions = NULL;
     }   // if
+
+
 
     // do not clean up m_CloseMutex and m_CloseCond
 
@@ -310,6 +310,7 @@ DbObject::Shutdown()
 #if 1
     bool again;
     ItrObject * itr_ptr;
+    SnapshotObject * snapshot_ptr;
 
     do
     {
@@ -332,6 +333,32 @@ DbObject::Shutdown()
         //  RemoveReference
         if (again)
             ItrObject::InitiateCloseRequest(itr_ptr);
+
+    } while(again);
+
+    // clean snapshots linked to the database object
+    again = true;
+    do
+    {
+        again=false;
+        snapshot_ptr=NULL;
+
+        // lock the SnapshotList
+        {
+            MutexLock lock(m_SnapshotMutex);
+
+            if (!m_SnapshotList.empty())
+            {
+                again=true;
+                snapshot_ptr=m_SnapshotList.front();
+                m_SnapshotList.pop_front();
+            }   // if
+        }
+
+        // must be outside lock so ItrObject can attempt
+        //  RemoveReference
+        if (again)
+            DbObject::InitiateCloseRequest(snapshot_ptr);
 
     } while(again);
 #endif
@@ -367,6 +394,160 @@ DbObject::RemoveReference(
     return;
 
 }   // DbObject::RemoveReference
+
+void
+DbObject::AddSnapshotReference(
+    SnapshotObject * SnapshotPtr)
+{
+    MutexLock lock(m_SnapshotMutex);
+
+    m_SnapshotList.push_back(SnapshotPtr);
+
+    return;
+
+}   // DbObject::AddSnapshotReference
+
+
+void
+DbObject::RemoveSnapshotReference(
+    SnapshotObject * SnapshotPtr)
+{
+    MutexLock lock(m_SnapshotMutex);
+
+    m_SnapshotList.remove(SnapshotPtr);
+
+    return;
+
+}   // DbObject::RemoveSnapshotReference
+
+
+/**
+ * snapshot object
+ */
+
+ErlNifResourceType* SnapshotObject::m_DbSnapshot_RESOURCE(NULL);
+
+
+void
+SnapshotObject::CreateSnapshotObjectType(
+    ErlNifEnv* Env)
+{
+    ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
+
+    m_DbSnapshot_RESOURCE = enif_open_resource_type(Env, NULL, "erocksdb_SnapshotObject",
+                                             &SnapshotObject::SnapshotObjectResourceCleanup,
+                                             flags, NULL);
+
+    return;
+
+}   // SnapshotObject::CreateSnapshotObjectType
+
+
+SnapshotObject *
+SnapshotObject::CreateSnapshotObject(
+    DbObject* DbPtr,
+    const rocksdb::Snapshot* Snapshot)
+{
+    SnapshotObject* ret_ptr;
+    void * alloc_ptr;
+
+    // the alloc call initializes the reference count to "one"
+    alloc_ptr=enif_alloc_resource(m_DbSnapshot_RESOURCE, sizeof(SnapshotObject));
+
+    ret_ptr=new (alloc_ptr) SnapshotObject(DbPtr, Snapshot);
+
+    // manual reference increase to keep active until "close" called
+    //  only inc local counter
+    ret_ptr->RefInc();
+
+    // see IterTask::operator() for release of reference count
+
+    return(ret_ptr);
+
+}   // SnapshotObject::CreateSnapshotObject
+
+
+SnapshotObject *
+SnapshotObject::RetrieveSnapshotObject(
+    ErlNifEnv* Env,
+    const ERL_NIF_TERM & SnapshotTerm)
+{
+    SnapshotObject* ret_ptr;
+
+    ret_ptr=NULL;
+
+    if (enif_get_resource(Env, SnapshotTerm, m_DbSnapshot_RESOURCE, (void **)&ret_ptr))
+    {
+        // has close been requested?
+        if (ret_ptr->m_CloseRequested)
+        {
+            // object already closing
+            ret_ptr=NULL;
+        }   // else
+    }   // if
+
+    return(ret_ptr);
+
+}   // SnapshotObject::RetrieveSnapshotObject
+
+
+void
+SnapshotObject::SnapshotObjectResourceCleanup(
+    ErlNifEnv* Env,
+    void * Arg)
+{
+    SnapshotObject* snapshot_ptr;
+
+    snapshot_ptr=(SnapshotObject *)Arg;
+
+    if(NULL!=snapshot_ptr->m_Snapshot)
+        snapshot_ptr->m_DbPtr->m_Db->ReleaseSnapshot(snapshot_ptr->m_Snapshot);
+
+    // vtable for snapshot_ptr could be invalid if close already
+    //  occurred
+    InitiateCloseRequest(snapshot_ptr);
+
+    // YES this can be called after snapshot_ptr destructor.  Don't panic.
+    AwaitCloseAndDestructor(snapshot_ptr);
+
+    return;
+
+}   // SnapshotObject::SnapshotObjectResourceCleanup
+
+
+SnapshotObject::SnapshotObject(
+    DbObject* DbPtr,
+    const rocksdb::Snapshot* Snapshot)
+    : m_Snapshot(Snapshot), m_DbPtr(DbPtr)
+{
+    if (NULL!=DbPtr)
+        DbPtr->AddSnapshotReference(this);
+
+}   // SnapshotObject::SnapshotObject
+
+
+SnapshotObject::~SnapshotObject()
+{
+
+    if (NULL!=m_DbPtr.get())
+        m_DbPtr->RemoveSnapshotReference(this);
+
+    m_Snapshot=NULL;
+
+    // do not clean up m_CloseMutex and m_CloseCond
+
+    return;
+
+}   // SnapshotObject::~SnapshotObject
+
+
+void
+SnapshotObject::Shutdown()
+{
+    RefDec();
+
+    return;
+}   // ItrObject::CloseRequest
 
 
 /**
@@ -430,6 +611,7 @@ ItrObject::RetrieveItrObject(
         // has close been requested?
         if (ret_ptr->m_CloseRequested
             || (!ItrClosing && ret_ptr->m_DbPtr->m_CloseRequested))
+
         {
             // object already closing
             ret_ptr=NULL;

@@ -31,6 +31,7 @@
 -export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
+-export([checkpoint/2]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 
 -export_type([db_handle/0,
@@ -483,6 +484,20 @@ destroy(_Name, _DBOpts) ->
                                       DBOpts::db_options()).
 repair(_Name, _DBOpts) ->
     erlang:nif_error({error, not_loaded}).
+
+
+async_checkpoint(_Callerfef, _DbHandle, _Path) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc take a snapshot of a running RocksDB database in a separate directory
+%% http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
+-spec(checkpoint(DbHandle::db_handle(), Path::file:filename_all()) ->
+ok | {error, any()}).
+checkpoint(DbHandle, Path) ->
+    CallerRef = make_ref(),
+    async_checkpoint(CallerRef, DbHandle, Path),
+    ?WAIT_FOR_REPLY(CallerRef).
+
 
 %% @doc
 %% Return the approximate number of keys in the default column family.

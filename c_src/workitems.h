@@ -27,6 +27,7 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/write_batch.h"
+#include "rocksdb/utilities/checkpoint.h"
 
 
 #ifndef INCL_MUTEX_H
@@ -198,6 +199,49 @@ public:
 
 
 /**
+ * Background object for async snapshot creation
+ */
+
+class CheckpointTask : public WorkTask
+{
+protected:
+    std::string path;
+
+public:
+    CheckpointTask(ErlNifEnv *_caller_env,
+                    ERL_NIF_TERM _caller_ref,
+                    DbObject *_db_handle,
+                    const std::string& path_)
+                : WorkTask(_caller_env, _caller_ref, _db_handle),
+                path(path_)
+    {
+
+    };
+
+    virtual ~CheckpointTask() {};
+
+    virtual work_result operator()()
+    {
+        rocksdb::Checkpoint* checkpoint;
+        rocksdb::Status status;
+
+        status = rocksdb::Checkpoint::Create(m_DbPtr->m_Db, &checkpoint);
+
+        if (status.ok()) {
+            status = checkpoint->CreateCheckpoint(path);
+            if (status.ok())
+            {
+                return work_result(ATOM_OK);
+            }
+        }
+        delete checkpoint;
+
+        return work_result(local_env(), ATOM_ERROR, status);
+    }   // operator()
+
+};  // class CheckpointTask
+
+/**
  * Background object for async write
  */
 
@@ -318,7 +362,7 @@ public:
         ItrObject * itr_ptr;
         rocksdb::Iterator * iterator;
 
-        // NOTE: transfering ownership of options to ItrObject        
+        // NOTE: transfering ownership of options to ItrObject
         itr_ptr=ItrObject::CreateItrObject(m_DbPtr.get(), keys_only, options);
 
 

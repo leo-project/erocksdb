@@ -74,6 +74,7 @@ static ErlNifFunc nif_funcs[] =
 
     {"async_snapshot", 2, erocksdb::async_snapshot},
     {"async_release_snapshot", 2, erocksdb::async_release_snapshot},
+    {"async_checkpoint", 3, erocksdb::async_checkpoint},
 
     {"async_iterator", 3, erocksdb::async_iterator},
     {"async_iterator", 4, erocksdb::async_iterator},
@@ -1276,6 +1277,52 @@ async_iterator_move(
     return ret_term;
 
 }   // async_iter_move
+
+
+ERL_NIF_TERM
+async_checkpoint(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    char path[4096];
+
+
+    ReferencePtr<DbObject> db_ptr;
+
+    db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+    {
+        return enif_make_badarg(env);
+    }
+
+    // is this even possible?
+    if(NULL == db_ptr->m_Db)
+        return send_reply(env, caller_ref, error_einval(env));
+
+    if(!enif_get_string(env, argv[2], path, sizeof(path), ERL_NIF_LATIN1))
+    {
+        return enif_make_badarg(env);
+    }
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::CheckpointTask(env, caller_ref, db_ptr.get(), path);
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return send_reply(env, caller_ref,
+                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+
+}   // async_checkpoint
 
 
 } // namespace erocksdb

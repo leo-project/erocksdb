@@ -355,10 +355,10 @@ DbObject::Shutdown()
             }   // if
         }
 
-        // must be outside lock so ItrObject can attempt
+        // must be outside lock so SnapshotObject can attempt
         //  RemoveReference
         if (again)
-            DbObject::InitiateCloseRequest(snapshot_ptr);
+            SnapshotObject::InitiateCloseRequest(snapshot_ptr);
 
     } while(again);
 #endif

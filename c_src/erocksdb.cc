@@ -72,10 +72,14 @@ static ErlNifFunc nif_funcs[] =
     {"async_write", 4, erocksdb::async_write},
     {"async_get", 4, erocksdb::async_get},
 
+    {"async_snapshot", 2, erocksdb::async_snapshot},
+    {"async_release_snapshot", 2, erocksdb::async_release_snapshot},
+
     {"async_iterator", 3, erocksdb::async_iterator},
     {"async_iterator", 4, erocksdb::async_iterator},
 
     {"async_iterator_move", 3, erocksdb::async_iterator_move}
+
 };
 
 
@@ -165,6 +169,8 @@ ERL_NIF_TERM ATOM_FILL_CACHE;
 ERL_NIF_TERM ATOM_ITERATE_UPPER_BOUND;
 ERL_NIF_TERM ATOM_TAILING;
 ERL_NIF_TERM ATOM_TOTAL_ORDER_SEEK;
+ERL_NIF_TERM ATOM_SNAPSHOT;
+ERL_NIF_TERM ATOM_BAD_SNAPSHOT;
 
 // Related to Write Options
 ERL_NIF_TERM ATOM_SYNC;
@@ -759,6 +765,16 @@ ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadO
             opts.tailing = (option[1] == erocksdb::ATOM_TRUE);
         else if (option[0] == erocksdb::ATOM_TOTAL_ORDER_SEEK)
             opts.total_order_seek = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_SNAPSHOT)
+        {
+            erocksdb::ReferencePtr<erocksdb::SnapshotObject> snapshot_ptr;
+            snapshot_ptr.assign(erocksdb::SnapshotObject::RetrieveSnapshotObject(env, option[1]));
+
+            if(NULL==snapshot_ptr.get())
+                return erocksdb::ATOM_BADARG;
+
+            opts.snapshot = snapshot_ptr->m_Snapshot;
+        }
     }
 
     return erocksdb::ATOM_OK;
@@ -879,6 +895,77 @@ async_open(
 
 }   // async_open
 
+ERL_NIF_TERM
+async_snapshot(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    ReferencePtr<DbObject> db_ptr;
+
+    db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+    {
+        return enif_make_badarg(env);
+    }
+
+    // is this even possible?
+    if(NULL == db_ptr->m_Db)
+        return send_reply(env, caller_ref, error_einval(env));
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::GetSnapshotTask(env, caller_ref, db_ptr.get());
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return send_reply(env, caller_ref,
+                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+}   // async_snapshot
+
+
+ERL_NIF_TERM
+async_release_snapshot(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    ReferencePtr<SnapshotObject> snapshot_ptr;
+
+    snapshot_ptr.assign(SnapshotObject::RetrieveSnapshotObject(env, handle_ref));
+
+    if(NULL==snapshot_ptr.get())
+    {
+        return send_reply(env, caller_ref, erocksdb::ATOM_OK);
+    }
+    
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::ReleaseSnapshotTask(env, caller_ref, snapshot_ptr.get());
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return send_reply(env, caller_ref,
+                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+}   // async_snapshot
+
 
 ERL_NIF_TERM
 async_write(
@@ -949,8 +1036,9 @@ async_get(
     const ERL_NIF_TERM& key_ref    = argv[2];
     const ERL_NIF_TERM& opts_ref   = argv[3];
 
-    ReferencePtr<DbObject> db_ptr;
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
 
+    ReferencePtr<DbObject> db_ptr;
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
 
     if(NULL==db_ptr.get()
@@ -963,8 +1051,11 @@ async_get(
     if(NULL == db_ptr->m_Db)
         return send_reply(env, caller_ref, error_einval(env));
 
-    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
-    fold(env, opts_ref, parse_read_option, *opts);
+    ERL_NIF_TERM fold_result;
+
+    fold_result = fold(env, opts_ref, parse_read_option, *opts);
+    if(fold_result!=erocksdb::ATOM_OK)
+        return enif_make_badarg(env);
 
     erocksdb::WorkTask *work_item = new erocksdb::GetTask(env, caller_ref,
                                                           db_ptr.get(), key_ref, opts);
@@ -995,9 +1086,11 @@ async_iterator(
 
     const bool keys_only = ((argc == 4) && (argv[3] == ATOM_KEYS_ONLY));
 
-    ReferencePtr<DbObject> db_ptr;
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
 
+    ReferencePtr<DbObject> db_ptr;
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
+
 
     if(NULL==db_ptr.get()
        || !enif_is_list(env, options_ref))
@@ -1009,9 +1102,11 @@ async_iterator(
     if(NULL == db_ptr->m_Db)
         return send_reply(env, caller_ref, error_einval(env));
 
-    // Parse out the read options
-    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
-    fold(env, options_ref, parse_read_option, *opts);
+    ERL_NIF_TERM fold_result;
+
+    fold_result = fold(env, options_ref, parse_read_option, *opts);
+    if(fold_result!=erocksdb::ATOM_OK)
+        return enif_make_badarg(env);
 
     erocksdb::WorkTask *work_item = new erocksdb::IterTask(env, caller_ref,
                                                            db_ptr.get(), keys_only, opts);
@@ -1051,7 +1146,7 @@ async_iterator_move(
         return enif_make_badarg(env);
 
     // Reuse ref from iterator creation
-    const ERL_NIF_TERM& caller_ref = itr_ptr->m_Snapshot->itr_ref;
+    const ERL_NIF_TERM& caller_ref = itr_ptr->m_Iter->itr_ref;
 
     /* We can be invoked with two different arities from Erlang. If our "action_atom" parameter is not
        in fact an atom, then it is actually a seek target. Let's find out which we are: */
@@ -1082,7 +1177,7 @@ async_iterator_move(
         itr_ptr->ReleaseReuseMove();
 
         submit_new_request=true;
-        ret_term = enif_make_copy(env, itr_ptr->m_Snapshot->itr_ref);
+        ret_term = enif_make_copy(env, itr_ptr->m_Iter->itr_ref);
 
         // force reply to be a message
         itr_ptr->m_Iter->m_HandoffAtomic=1;
@@ -1094,7 +1189,7 @@ async_iterator_move(
     else if (erocksdb::compare_and_swap(&itr_ptr->m_Iter->m_HandoffAtomic, 0, 1))
     {
         // nope, no prefetch ... await a message to erlang queue
-        ret_term = enif_make_copy(env, itr_ptr->m_Snapshot->itr_ref);
+        ret_term = enif_make_copy(env, itr_ptr->m_Iter->itr_ref);
 
         // is this truly a wait for prefetch ... or actually the first prefetch request
         if (!itr_ptr->m_Iter->m_PrefetchStarted)
@@ -1420,6 +1515,7 @@ try
     // inform erlang of our two resource types
     erocksdb::DbObject::CreateDbObjectType(env);
     erocksdb::ItrObject::CreateItrObjectType(env);
+    erocksdb::SnapshotObject::CreateSnapshotObjectType(env);
 
 // must initialize atoms before processing options
 #define ATOM(Id, Value) { Id = enif_make_atom(env, Value); }
@@ -1506,6 +1602,8 @@ try
     ATOM(erocksdb::ATOM_ITERATE_UPPER_BOUND,"iterate_upper_bound");
     ATOM(erocksdb::ATOM_TAILING,"tailing");
     ATOM(erocksdb::ATOM_TOTAL_ORDER_SEEK,"total_order_seek");
+    ATOM(erocksdb::ATOM_SNAPSHOT, "snapshot");
+    ATOM(erocksdb::ATOM_BAD_SNAPSHOT, "bad_snapshot");
 
     // Related to Write Options
     ATOM(erocksdb::ATOM_SYNC, "sync");

@@ -112,8 +112,9 @@ protected:
 
 public:
     OpenTask(ErlNifEnv* caller_env, ERL_NIF_TERM& _caller_ref,
-             const std::string& db_name_, 
+             const std::string& db_name_,
              rocksdb::Options *Options_);
+
 
     virtual ~OpenTask() {};
 
@@ -126,6 +127,74 @@ private:
 
 };  // class OpenTask
 
+
+/**
+ * Background object for async snapshot creation
+ */
+
+class GetSnapshotTask : public WorkTask
+{
+public:
+    GetSnapshotTask(ErlNifEnv *_caller_env,
+                    ERL_NIF_TERM _caller_ref,
+                    DbObject *_db_handle)
+                : WorkTask(_caller_env, _caller_ref, _db_handle)
+    {
+
+    };
+
+    virtual ~GetSnapshotTask() {};
+
+    virtual work_result operator()()
+    {
+        SnapshotObject* snapshot_ptr;
+
+        const rocksdb::Snapshot* snapshot;
+        snapshot = m_DbPtr->m_Db->GetSnapshot();
+
+        snapshot_ptr=SnapshotObject::CreateSnapshotObject(m_DbPtr.get(), snapshot);
+
+        // create a resource reference to send erlang
+        ERL_NIF_TERM result = enif_make_resource(local_env(), snapshot_ptr);
+
+        // clear the automatic reference from enif_alloc_resource in CreateDbObject
+        enif_release_resource(snapshot_ptr);
+
+        snapshot = NULL;
+
+        return work_result(local_env(), ATOM_OK, result);
+    }   // operator()
+
+};  // class GetSnapshotTask
+
+class ReleaseSnapshotTask : public WorkTask
+{
+
+protected:
+    ReferencePtr<SnapshotObject> m_SnapshotPtr;
+
+public:
+    ReleaseSnapshotTask(ErlNifEnv *_caller_env, ERL_NIF_TERM _caller_ref,
+                        SnapshotObject * Snapshot)
+                  : WorkTask(_caller_env, _caller_ref), m_SnapshotPtr(Snapshot)
+    {};
+
+    virtual ~ReleaseSnapshotTask() {};
+
+    virtual work_result operator()()
+    {
+        SnapshotObject* snapshot = m_SnapshotPtr.get();
+
+        snapshot->m_DbPtr->m_Db->ReleaseSnapshot(snapshot->m_Snapshot);
+
+        // set closing flag
+        ErlRefObject::InitiateCloseRequest(snapshot);
+
+        return work_result(ATOM_OK);
+
+    }   // operator()
+
+};  // class GetSnapshotTask
 
 
 /**
@@ -228,6 +297,7 @@ protected:
     rocksdb::ReadOptions *options;
 
 public:
+
     IterTask(ErlNifEnv *_caller_env,
              ERL_NIF_TERM _caller_ref,
              DbObject *_db_handle,
@@ -246,24 +316,18 @@ public:
     virtual work_result operator()()
     {
         ItrObject * itr_ptr;
-        const rocksdb::Snapshot * snapshot;
         rocksdb::Iterator * iterator;
 
-        // NOTE: transfering ownership of options to ItrObject
+        // NOTE: transfering ownership of options to ItrObject        
         itr_ptr=ItrObject::CreateItrObject(m_DbPtr.get(), keys_only, options);
 
-        snapshot = m_DbPtr->m_Db->GetSnapshot();
-        itr_ptr->m_Snapshot.assign(new RocksSnapshotWrapper(m_DbPtr.get(), snapshot));
-        options->snapshot = snapshot;
-
-        // Copy caller_ref to reuse in future iterator_move calls
-        itr_ptr->m_Snapshot->itr_ref_env = enif_alloc_env();
-        itr_ptr->m_Snapshot->itr_ref = enif_make_copy(itr_ptr->m_Snapshot->itr_ref_env,
-                                                      caller_ref());
 
         iterator = m_DbPtr->m_Db->NewIterator(*options);
-        itr_ptr->m_Iter.assign(new RocksIteratorWrapper(m_DbPtr.get(), itr_ptr->m_Snapshot.get(),
-                                                        iterator, keys_only));
+        itr_ptr->m_Iter.assign(new RocksIteratorWrapper(m_DbPtr.get(), iterator, keys_only));
+
+        // Copy caller_ref to reuse in future iterator_move calls
+        itr_ptr->m_Iter->itr_ref_env = enif_alloc_env();
+        itr_ptr->m_Iter->itr_ref = enif_make_copy(itr_ptr->m_Iter->itr_ref_env, caller_ref());
 
         ERL_NIF_TERM result = enif_make_resource(local_env(), itr_ptr);
 

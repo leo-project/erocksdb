@@ -259,7 +259,7 @@ MoveTask::local_env()
 
     if (!terms_set)
     {
-        caller_ref_term = enif_make_copy(local_env_, m_ItrWrap->m_Snap->itr_ref);
+        caller_ref_term = enif_make_copy(local_env_, m_ItrWrap->itr_ref);
         caller_pid_term = enif_make_pid(local_env_, &local_pid);
         terms_set=true;
     }   // if

@@ -25,6 +25,7 @@
 -module(erocksdb).
 
 -export([open/3, open_with_cf/3, close/1]).
+-export([snapshot/1, release_snapshot/1]).
 -export([list_column_families/2, create_column_family/3, drop_column_family/2]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
 -export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
@@ -35,6 +36,7 @@
 -export_type([db_handle/0,
               cf_handle/0,
               itr_handle/0,
+              snapshot_handle/0,
               compression_type/0,
               compaction_style/0,
               access_hint/0]).
@@ -86,6 +88,7 @@ init() ->
 -opaque db_handle() :: binary().
 -opaque cf_handle() :: binary().
 -opaque itr_handle() :: binary().
+-opaque snapshot_handle() :: binary().
 
 -type cf_options() :: [{block_cache_size_mb_for_point_lookup, non_neg_integer()} |
                        {memtable_memory_budget, pos_integer()} |
@@ -157,7 +160,8 @@ init() ->
                          {fill_cache, boolean()} |
                          {iterate_upper_bound, binary()} |
                          {tailing, boolean()} |
-                         {total_order_seek, boolean()}].
+                         {total_order_seek, boolean()} |
+                         {snapshot, snapshot_handle()}].
 
 -type write_options() :: [{sync, boolean()} |
                           {disable_wal, boolean()} |
@@ -190,9 +194,9 @@ open(Name, DBOpts, CFOpts) ->
 %% Open RocksDB with the specified column families
 -spec(open_with_cf(Name, DBOpts, CFDescriptors) ->
              {ok, db_handle(), list(cf_handle())} | {error, any()}
-                 when Name::file:filename_all(),
-                      DBOpts :: db_options(),
-                      CFDescriptors :: list(#cf_descriptor{})).
+               when Name::file:filename_all(),
+                    DBOpts :: db_options(),
+                    CFDescriptors :: list(#cf_descriptor{})).
 open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
     {error, not_implemeted}.
 
@@ -206,6 +210,30 @@ async_close(_Callerfef, _DBHandle) ->
 close(DBHandle) ->
     CallerRef = make_ref(),
     async_close(CallerRef, DBHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_snapshot(_CallerRef, _DbHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
+
+%% @sdoc return a database snapshot
+%% Snapshots provide consistent read-only views over the entire state of the key-value store
+-spec(snapshot(DbHandle::db_handle()) ->
+    {ok, snapshot_handle()} | {error, any()}).
+snapshot(DbHandle) ->
+    CallerRef = make_ref(),
+    async_snapshot(CallerRef, DbHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_release_snapshot(_CallerRef, _SnapshotHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc release a snapshot
+-spec(release_snapshot(SnapshotHandle::snapshot_handle()) ->
+    ok | {error, any()}).
+release_snapshot(SnapshotHandle) ->
+    CallerRef = make_ref(),
+    async_release_snapshot(CallerRef, SnapshotHandle),
     ?WAIT_FOR_REPLY(CallerRef).
 
 %% @doc

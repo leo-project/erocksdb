@@ -1,0 +1,14 @@
+diff --git a/db/version_set.cc b/db/version_set.cc
+index 4cf493f..a2a6023 100644
+--- a/db/version_set.cc
++++ b/db/version_set.cc
+@@ -1975,7 +1975,8 @@ uint64_t VersionStorageInfo::EstimateLiveDataSize() const {
+       found_end = (lb == ranges.end());
+       if (found_end || internal_comparator_->Compare(
+             file->largest, (*lb).second->smallest) < 0) {
+-          ranges.emplace_hint(lb, &file->largest, file);
++          //ranges.emplace_hint(lb, &file->largest, file);
++          ranges[&file->largest] = file;
+           size += file->fd.file_size;
+       }
+     }

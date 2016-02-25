@@ -68,6 +68,13 @@ case "$1" in
         if [ ! -d rocksdb ]; then
             git clone git://github.com/facebook/rocksdb
             (cd rocksdb && git checkout $ROCKSDB_VSN)
+            case "$SYSTEM" in
+                Solaris|SunOS)
+                    patch rocksdb/db/version_set.cc solaris.patch
+                ;;
+                *)
+                ;;
+            esac
         fi
         ;;
 

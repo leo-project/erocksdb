@@ -70,7 +70,7 @@ case "$1" in
             (cd rocksdb && git checkout $ROCKSDB_VSN)
             case "$SYSTEM" in
                 Solaris|SunOS)
-                    patch rocksdb/db/version_set.cc solaris.patch
+                    patch rocksdb/db/version_set.cc smartos.patch
                 ;;
                 *)
                 ;;

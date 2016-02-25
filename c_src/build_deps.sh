@@ -8,7 +8,7 @@ if [ `uname -s` = 'SunOS' -a "${POSIX_SHELL}" != "true" ]; then
 fi
 unset POSIX_SHELL # clear it so if we invoke other scripts, they run as ksh as well
 
-ROCKSDB_VSN="rocksdb-4.1"
+ROCKSDB_VSN="master"
 
 SNAPPY_VSN="1.1.1"
 
@@ -29,6 +29,18 @@ which gmake 1>/dev/null 2>/dev/null && MAKE=gmake
 MAKE=${MAKE:-make}
 
 # Changed "make" to $MAKE
+
+[ "$SYSTEM" ] || SYSTEM=`(uname -s) 2>/dev/null`  || SYSTEM="unknown"
+
+CXX=
+CXXFLAGS="-fPIC -fno-builtin-memcmp"
+case "$SYSTEM" in
+    Solaris|SunOS)
+       CXX="g++ -std=c++11 -D_GLIBCXX_USE_C99 -D_GLIBCXX_USE_SCHED_YIELD"
+       ;;
+    *)
+       ;;
+esac
 
 case "$1" in
     rm-deps)
@@ -77,7 +89,8 @@ case "$1" in
             (cd rocksdb && git checkout $ROCKSDB_VSN)
         fi
         if [ ! -f rocksdb/librocksdb.a ]; then
-            (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
+            (cd rocksdb && CXXFLAGS=$CXXFLAGS CXX=$CXX $MAKE static_lib)
+
         fi
         ;;
 esac

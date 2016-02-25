@@ -70,9 +70,11 @@ case "$1" in
             (cd rocksdb && git checkout $ROCKSDB_VSN)
             case "$SYSTEM" in
                 Solaris|SunOS)
+                    echo "Applying smartos.patch patch"
                     patch rocksdb/db/version_set.cc smartos.patch
                 ;;
                 *)
+                    echo "Not applying patches for $SYSTEM"
                 ;;
             esac
         fi
@@ -91,10 +93,7 @@ case "$1" in
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        if [ ! -d rocksdb ]; then
-            git clone git://github.com/facebook/rocksdb
-            (cd rocksdb && git checkout $ROCKSDB_VSN)
-        fi
+        ./build_deps.sh get-deps
         if [ ! -f rocksdb/librocksdb.a ]; then
             (cd rocksdb && CXXFLAGS=$CXXFLAGS CXX=$CXX $MAKE static_lib)
 

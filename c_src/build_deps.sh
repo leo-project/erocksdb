@@ -8,7 +8,7 @@ if [ `uname -s` = 'SunOS' -a "${POSIX_SHELL}" != "true" ]; then
 fi
 unset POSIX_SHELL # clear it so if we invoke other scripts, they run as ksh as well
 
-ROCKSDB_VSN="rocksdb-4.1"
+ROCKSDB_VSN="69c98f043185f49ee1d83465b2eafe2afdef7c98"
 
 SNAPPY_VSN="1.1.1"
 
@@ -29,6 +29,18 @@ which gmake 1>/dev/null 2>/dev/null && MAKE=gmake
 MAKE=${MAKE:-make}
 
 # Changed "make" to $MAKE
+
+[ "$SYSTEM" ] || SYSTEM=`(uname -s) 2>/dev/null`  || SYSTEM="unknown"
+
+CXX=
+CXXFLAGS="-fPIC -fno-builtin-memcmp"
+case "$SYSTEM" in
+    Solaris|SunOS)
+       CXX="g++ -std=c++11 -D_GLIBCXX_USE_C99 -D_GLIBCXX_USE_SCHED_YIELD"
+       ;;
+    *)
+       ;;
+esac
 
 case "$1" in
     rm-deps)
@@ -56,6 +68,15 @@ case "$1" in
         if [ ! -d rocksdb ]; then
             git clone git://github.com/facebook/rocksdb
             (cd rocksdb && git checkout $ROCKSDB_VSN)
+            case "$SYSTEM" in
+                Solaris|SunOS)
+                    echo "Applying smartos.patch patch"
+                    patch rocksdb/db/version_set.cc smartos.patch
+                ;;
+                *)
+                    echo "Not applying patches for $SYSTEM"
+                ;;
+            esac
         fi
         ;;
 
@@ -72,12 +93,10 @@ case "$1" in
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        if [ ! -d rocksdb ]; then
-            git clone git://github.com/facebook/rocksdb
-            (cd rocksdb && git checkout $ROCKSDB_VSN)
-        fi
+        ./build_deps.sh get-deps
         if [ ! -f rocksdb/librocksdb.a ]; then
-            (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
+            (cd rocksdb && CXXFLAGS=$CXXFLAGS CXX=$CXX $MAKE static_lib)
+
         fi
         ;;
 esac

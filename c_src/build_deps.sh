@@ -8,7 +8,9 @@ if [ `uname -s` = 'SunOS' -a "${POSIX_SHELL}" != "true" ]; then
 fi
 unset POSIX_SHELL # clear it so if we invoke other scripts, they run as ksh as well
 
-ROCKSDB_VSN="rocksdb-4.1"
+SCRIPT="`pwd`/$0"
+
+ROCKSDB_VSN="4.1"
 
 SNAPPY_VSN="1.1.1"
 
@@ -32,7 +34,7 @@ MAKE=${MAKE:-make}
 
 case "$1" in
     rm-deps)
-        rm -rf rocksdb system snappy-$SNAPPY_VSN
+        rm -rf rocksdb system snappy-$SNAPPY_VSN rocksdb-$ROCKSDB_VSN.tar.gz
         ;;
 
     clean)
@@ -54,8 +56,12 @@ case "$1" in
 
     get-deps)
         if [ ! -d rocksdb ]; then
-            git clone git://github.com/facebook/rocksdb
-            (cd rocksdb && git checkout $ROCKSDB_VSN)
+            ROCKSDBURL="https://github.com/facebook/rocksdb/archive/v$ROCKSDB_VSN.tar.gz"
+            ROCKSDBTARGZ="rocksdb-$ROCKSDB_VSN.tar.gz"
+            echo Downloading $ROCKSDBURL...
+            curl -L -o $ROCKSDBTARGZ $ROCKSDBURL
+            tar -xzf $ROCKSDBTARGZ
+            mv rocksdb-$ROCKSDB_VSN rocksdb
         fi
         ;;
 
@@ -72,10 +78,7 @@ case "$1" in
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        if [ ! -d rocksdb ]; then
-            git clone git://github.com/facebook/rocksdb
-            (cd rocksdb && git checkout $ROCKSDB_VSN)
-        fi
+        sh $SCRIPT get-deps
         if [ ! -f rocksdb/librocksdb.a ]; then
             (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
         fi

@@ -5,6 +5,7 @@ priv/*
 *.beam
 ebin
 c_src/rocksdb/
+c_src/rocksdb-*.tar.gz
 c_src/snappy*/
 c_src/system
 *~

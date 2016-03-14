@@ -9,7 +9,6 @@ rm-deps:
 	./c_src/build_deps.sh rm-deps
 
 compile:
-	./c_src/build_deps.sh
 	PLATFORM_LDFLAGS="`cat c_src/rocksdb/${BUILD_CONFIG} |grep PLATFORM_LDFLAGS| awk -F= '{print $$2}'|sed -e 's/-lsnappy//'`" ./rebar compile
 
 test: compile

@@ -1,0 +1,17 @@
+%% Build the rocksdb beforehand to retrieve the PLATFORM_LDFLAGS from
+%% c_src/rocksdb/${BUILD_CONFIG} and pass it to rebar compile as an
+%% environment variable
+
+CurrentDir = filename:dirname(SCRIPT).
+
+File = filename:join([CurrentDir, "c_src", "rocksdb", "make_config.mk"]).
+
+Opt = " $(cat " ++ File  ++ " | grep PLATFORM_LDFLAGS | cut -d' ' -f2- | sed -e 's/-lsnappy//')".
+
+Flag = "DRV_LDFLAGS".
+
+{port_env, PortVals} = lists:keyfind(port_env, 1, CONFIG).
+{Flag, Val} = lists:keyfind(Flag, 1, PortVals).
+
+NewPortVals = lists:keyreplace(Flag, 1, PortVals, {Flag, Val ++ Opt}).
+lists:keyreplace(port_env, 1, CONFIG, {port_env, NewPortVals}).

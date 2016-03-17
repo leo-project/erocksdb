@@ -8,7 +8,10 @@ if [ `uname -s` = 'SunOS' -a "${POSIX_SHELL}" != "true" ]; then
 fi
 unset POSIX_SHELL # clear it so if we invoke other scripts, they run as ksh as well
 
-SCRIPT="`pwd`/$0"
+SCRIPTPATH=$( cd $(dirname $0) ; pwd -P )
+SCRIPT=$SCRIPTPATH/${0##*/}
+BASEDIR=$SCRIPTPATH
+BUILD_CONFIG=$BASEDIR/rocksdb/make_config.mk
 
 ROCKSDB_VSN="4.1"
 
@@ -22,7 +25,6 @@ if [ `basename $PWD` != "c_src" ]; then
     cd c_src
 fi
 
-BASEDIR="$PWD"
 
 # detecting gmake and if exists use it
 # if not use make
@@ -71,7 +73,9 @@ case "$1" in
             (cd snappy-$SNAPPY_VSN && ./configure --prefix=$BASEDIR/system --libdir=$BASEDIR/system/lib --with-pic)
         fi
 
-        (cd snappy-$SNAPPY_VSN && $MAKE && $MAKE install)
+        if [ ! -f system/lib/libsnappy.a ]; then
+            (cd snappy-$SNAPPY_VSN && $MAKE && $MAKE install)
+        fi
 
         export CFLAGS="$CFLAGS -I $BASEDIR/system/include"
         export CXXFLAGS="$CXXFLAGS -I $BASEDIR/system/include"

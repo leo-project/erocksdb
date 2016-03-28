@@ -164,6 +164,7 @@ ERL_NIF_TERM ATOM_ACCESS_HINT;
 ERL_NIF_TERM ATOM_COMPACTION_READAHEAD_SIZE;
 ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
+ERL_NIF_TERM ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN;
 
 // Related to Read Options
 ERL_NIF_TERM ATOM_VERIFY_CHECKSUMS;
@@ -516,6 +517,10 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             ErlNifUInt64 bytes_per_sync;
             if (enif_get_uint64(env, option[1], &bytes_per_sync))
                 opts.bytes_per_sync = bytes_per_sync;
+        }
+        else if (option[0] == erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN)
+        {
+            opts.skip_stats_update_on_db_open = (option[1] == erocksdb::ATOM_TRUE);
         }
     }
 
@@ -1650,6 +1655,7 @@ try
     ATOM(erocksdb::ATOM_COMPACTION_READAHEAD_SIZE, "compaction_readahead_size");
     ATOM(erocksdb::ATOM_USE_ADAPTIVE_MUTEX, "use_adaptive_mutex");
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
+    ATOM(erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN, "skip_stats_update_on_db_open");
 
     // Related to Read Options
     ATOM(erocksdb::ATOM_VERIFY_CHECKSUMS, "verify_checksums");

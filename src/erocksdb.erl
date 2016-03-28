@@ -156,7 +156,8 @@ init() ->
                        {access_hint, access_hint()} |
                        {compaction_readahead_size, non_neg_integer()} |
                        {use_adaptive_mutex, boolean()} |
-                       {bytes_per_sync, non_neg_integer()}].
+                       {bytes_per_sync, non_neg_integer()} |
+                       {skip_stats_update_on_db_open, boolean()}].
 
 -type read_options() :: [{verify_checksums, boolean()} |
                          {fill_cache, boolean()} |

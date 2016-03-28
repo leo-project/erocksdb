@@ -165,6 +165,7 @@ ERL_NIF_TERM ATOM_COMPACTION_READAHEAD_SIZE;
 ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
 ERL_NIF_TERM ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN;
+ERL_NIF_TERM ATOM_WAL_RECOVERY_MODE;
 
 // Related to Read Options
 ERL_NIF_TERM ATOM_VERIFY_CHECKSUMS;
@@ -214,6 +215,12 @@ ERL_NIF_TERM ATOM_COMPACTION_STYLE_LEVEL;
 ERL_NIF_TERM ATOM_COMPACTION_STYLE_UNIVERSAL;
 ERL_NIF_TERM ATOM_COMPACTION_STYLE_FIFO;
 ERL_NIF_TERM ATOM_COMPACTION_STYLE_NONE;
+
+// Related to WAL Recovery Mode
+ERL_NIF_TERM ATOM_WAL_TOLERATE_CORRUPTED_TAIL_RECORDS;
+ERL_NIF_TERM ATOM_WAL_ABSOLUTE_CONSISTENCY;
+ERL_NIF_TERM ATOM_WAL_POINT_IN_TIME_RECOVERY;
+ERL_NIF_TERM ATOM_WAL_SKIP_ANY_CORRUPTED_RECORDS;
 
 // Related to Error Codes
 ERL_NIF_TERM ATOM_ERROR_DB_OPEN;
@@ -521,6 +528,21 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
         else if (option[0] == erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN)
         {
             opts.skip_stats_update_on_db_open = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_WAL_RECOVERY_MODE)
+        {
+            if (option[1] == erocksdb::ATOM_WAL_TOLERATE_CORRUPTED_TAIL_RECORDS) {
+                opts.wal_recovery_mode = rocksdb::WALRecoveryMode::kTolerateCorruptedTailRecords;
+            }
+            else if (option[1] == erocksdb::ATOM_WAL_ABSOLUTE_CONSISTENCY) {
+                opts.wal_recovery_mode = rocksdb::WALRecoveryMode::kAbsoluteConsistency;
+            }
+            else if (option[1] == erocksdb::ATOM_WAL_POINT_IN_TIME_RECOVERY) {
+                opts.wal_recovery_mode = rocksdb::WALRecoveryMode::kPointInTimeRecovery;
+            }
+            else if (option[1] == erocksdb::ATOM_WAL_SKIP_ANY_CORRUPTED_RECORDS) {
+                opts.wal_recovery_mode = rocksdb::WALRecoveryMode::kSkipAnyCorruptedRecords;
+            }
         }
     }
 
@@ -1656,6 +1678,7 @@ try
     ATOM(erocksdb::ATOM_USE_ADAPTIVE_MUTEX, "use_adaptive_mutex");
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
     ATOM(erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN, "skip_stats_update_on_db_open");
+    ATOM(erocksdb::ATOM_WAL_RECOVERY_MODE, "wal_recovery_mode");
 
     // Related to Read Options
     ATOM(erocksdb::ATOM_VERIFY_CHECKSUMS, "verify_checksums");
@@ -1705,6 +1728,12 @@ try
     ATOM(erocksdb::ATOM_COMPACTION_STYLE_UNIVERSAL, "universal");
     ATOM(erocksdb::ATOM_COMPACTION_STYLE_FIFO, "fifo");
     ATOM(erocksdb::ATOM_COMPACTION_STYLE_NONE, "none");
+
+    // Related to WAL Recovery Mode
+    ATOM(erocksdb::ATOM_WAL_TOLERATE_CORRUPTED_TAIL_RECORDS, "tolerate_corrupted_tail_records");
+    ATOM(erocksdb::ATOM_WAL_ABSOLUTE_CONSISTENCY, "absolute_consistency");
+    ATOM(erocksdb::ATOM_WAL_POINT_IN_TIME_RECOVERY, "point_in_time_recovery");
+    ATOM(erocksdb::ATOM_WAL_SKIP_ANY_CORRUPTED_RECORDS, "skip_any_corrupted_records");
 
     // Related to Error Codes
     ATOM(erocksdb::ATOM_ERROR_DB_OPEN,"db_open");

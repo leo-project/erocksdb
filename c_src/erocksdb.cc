@@ -161,6 +161,7 @@ ERL_NIF_TERM ATOM_SKIP_LOG_ERROR_ON_RECOVERY;
 ERL_NIF_TERM ATOM_STATS_DUMP_PERIOD_SEC;
 ERL_NIF_TERM ATOM_ADVISE_RANDOM_ON_OPEN;
 ERL_NIF_TERM ATOM_ACCESS_HINT;
+ERL_NIF_TERM ATOM_COMPACTION_READAHEAD_SIZE;
 ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
 
@@ -499,6 +500,12 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             else if (option[1] == erocksdb::ATOM_ACCESS_HINT_NONE) {
                 opts.access_hint_on_compaction_start = rocksdb::DBOptions::AccessHint::NONE;
             }
+        }
+        else if (option[0] == erocksdb::ATOM_COMPACTION_READAHEAD_SIZE)
+        {
+            unsigned int compaction_readahead_size;
+            if (enif_get_uint(env, option[1], &compaction_readahead_size))
+                opts.compaction_readahead_size = compaction_readahead_size;
         }
         else if (option[0] == erocksdb::ATOM_USE_ADAPTIVE_MUTEX)
         {
@@ -1640,6 +1647,7 @@ try
     ATOM(erocksdb::ATOM_STATS_DUMP_PERIOD_SEC, "stats_dump_period_sec");
     ATOM(erocksdb::ATOM_ADVISE_RANDOM_ON_OPEN, "advise_random_on_open");
     ATOM(erocksdb::ATOM_ACCESS_HINT, "access_hint");
+    ATOM(erocksdb::ATOM_COMPACTION_READAHEAD_SIZE, "compaction_readahead_size");
     ATOM(erocksdb::ATOM_USE_ADAPTIVE_MUTEX, "use_adaptive_mutex");
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
 

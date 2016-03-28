@@ -154,6 +154,7 @@ init() ->
                        {stats_dump_period_sec, non_neg_integer()} |
                        {advise_random_on_open, boolean()} |
                        {access_hint, access_hint()} |
+                       {compaction_readahead_size, non_neg_integer()} |
                        {use_adaptive_mutex, boolean()} |
                        {bytes_per_sync, non_neg_integer()}].
 

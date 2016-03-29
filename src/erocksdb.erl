@@ -40,7 +40,8 @@
               snapshot_handle/0,
               compression_type/0,
               compaction_style/0,
-              access_hint/0]).
+              access_hint/0,
+              wal_recovery_mode/0]).
 
 -on_load(init/0).
 
@@ -85,6 +86,10 @@ init() ->
 -type compression_type() :: snappy | zlib | bzip2 | lz4 | lz4h | none.
 -type compaction_style() :: level | universal | fifo | none.
 -type access_hint() :: normal | sequential | willneed | none.
+-type wal_recovery_mode() :: tolerate_corrupted_tail_records |
+                             absolute_consistency |
+                             point_in_time_recovery |
+                             skip_any_corrupted_records.
 
 -opaque db_handle() :: binary().
 -opaque cf_handle() :: binary().
@@ -154,8 +159,11 @@ init() ->
                        {stats_dump_period_sec, non_neg_integer()} |
                        {advise_random_on_open, boolean()} |
                        {access_hint, access_hint()} |
+                       {compaction_readahead_size, non_neg_integer()} |
                        {use_adaptive_mutex, boolean()} |
-                       {bytes_per_sync, non_neg_integer()}].
+                       {bytes_per_sync, non_neg_integer()} |
+                       {skip_stats_update_on_db_open, boolean()} |
+                       {wal_recovery_mode, wal_recovery_mode()}].
 
 -type read_options() :: [{verify_checksums, boolean()} |
                          {fill_cache, boolean()} |

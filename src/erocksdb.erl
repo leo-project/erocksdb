@@ -163,7 +163,9 @@ init() ->
                        {use_adaptive_mutex, boolean()} |
                        {bytes_per_sync, non_neg_integer()} |
                        {skip_stats_update_on_db_open, boolean()} |
-                       {wal_recovery_mode, wal_recovery_mode()}].
+                       {wal_recovery_mode, wal_recovery_mode()} |
+                       {allow_concurrent_memtable_write, boolean()} |
+                       {enable_write_thread_adaptive_yield, boolean()}].
 
 -type read_options() :: [{verify_checksums, boolean()} |
                          {fill_cache, boolean()} |

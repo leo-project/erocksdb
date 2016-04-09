@@ -70,8 +70,8 @@ static ErlNifFunc nif_funcs[] =
     {"checkpoint", 2, erocksdb::checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // snaptshot operation
-    {"snapshot", 1, erocksdb::snapshot, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"release_snapshot", 1, erocksdb::release_snapshot, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"snapshot", 1, erocksdb::snapshot, ERL_NIF_DIRTY_JOB_CPU_BOUND},
+    {"release_snapshot", 1, erocksdb::release_snapshot, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 
     // K/V operations
     {"write", 3, erocksdb::write, ERL_NIF_DIRTY_JOB_IO_BOUND},

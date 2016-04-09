@@ -187,8 +187,6 @@ init() ->
 
 -type iterator_action() :: first | last | next | prev | binary().
 
-async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
-    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Open RocksDB with the defalut column family
@@ -196,10 +194,8 @@ async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options()).
-open(Name, DBOpts, CFOpts) ->
-    CallerRef = make_ref(),
-    async_open(CallerRef, Name, DBOpts, CFOpts),
-    ?WAIT_FOR_REPLY(CallerRef).
+open(_Name, _DBOpts, _CFOpts) ->
+    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Open RocksDB with the specified column families
@@ -211,41 +207,32 @@ open(Name, DBOpts, CFOpts) ->
 open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
     {error, not_implemeted}.
 
-async_close(_Callerfef, _DBHandle) ->
-    erlang:nif_error({error, not_loaded}).
-
 %% @doc
 %% Close RocksDB
 -spec(close(DBHandle) ->
              ok | {error, any()} when DBHandle::db_handle()).
-close(DBHandle) ->
-    CallerRef = make_ref(),
-    async_close(CallerRef, DBHandle),
-    ?WAIT_FOR_REPLY(CallerRef).
-
-async_snapshot(_CallerRef, _DbHandle) ->
+close(_DBHandle) ->
     erlang:nif_error({error, not_loaded}).
 
+%% @doc take a snapshot of a running RocksDB database in a separate directory
+%% http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
+-spec checkpoint(DbHandle::db_handle(), Path::file:filename_all()) ->
+    ok
+    | {error, any()}.
+checkpoint(_DbHandle, _Path) ->
+    erlang:nif_error({error, not_loaded}).
 
 %% @sdoc return a database snapshot
 %% Snapshots provide consistent read-only views over the entire state of the key-value store
--spec(snapshot(DbHandle::db_handle()) ->
-    {ok, snapshot_handle()} | {error, any()}).
-snapshot(DbHandle) ->
-    CallerRef = make_ref(),
-    async_snapshot(CallerRef, DbHandle),
-    ?WAIT_FOR_REPLY(CallerRef).
-
-async_release_snapshot(_CallerRef, _SnapshotHandle) ->
+-spec(snapshot(DbHandle::db_handle()) -> {ok, snapshot_handle()} | {error, any()}).
+snapshot(_DbHandle) ->
     erlang:nif_error({error, not_loaded}).
 
+
 %% @doc release a snapshot
--spec(release_snapshot(SnapshotHandle::snapshot_handle()) ->
-    ok | {error, any()}).
-release_snapshot(SnapshotHandle) ->
-    CallerRef = make_ref(),
-    async_release_snapshot(CallerRef, SnapshotHandle),
-    ?WAIT_FOR_REPLY(CallerRef).
+-spec(release_snapshot(SnapshotHandle::snapshot_handle()) -> ok | {error, any()}).
+release_snapshot(_SnapshotHandle) ->
+    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% List column families
@@ -312,33 +299,25 @@ delete(DBHandle, Key, WriteOpts) ->
 delete(_DBHandle, _CFHandle, _Key, _WriteOpts) ->
     {error, not_implemeted}.
 
-async_write(_CallerRef, _DBHandle, _WriteActions, _WriteOpts) ->
-    erlang:nif_error({error, not_loaded}).
-
 %% @doc
 %% Apply the specified updates to the database.
 -spec(write(DBHandle, WriteActions, WriteOpts) ->
              ok | {error, any()} when DBHandle::db_handle(),
                                       WriteActions::write_actions(),
                                       WriteOpts::write_options()).
-write(DBHandle, WriteActions, WriteOpts) ->
-    CallerRef = make_ref(),
-    async_write(CallerRef, DBHandle, WriteActions, WriteOpts),
-    ?WAIT_FOR_REPLY(CallerRef).
-
-async_get(_CallerRef, _DBHandle, _Key, _ReadOpts) ->
+write(_DBHandle, _WriteActions, _WriteOpts) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Retrieve a key/value pair in the default column family
--spec(get(DBHandle, Key, ReadOpts) ->
-             {ok, binary()} | not_found | {error, any()} when DBHandle::db_handle(),
-                                                              Key::binary(),
-                                                              ReadOpts::read_options()).
-get(DBHandle, Key, ReadOpts) ->
-    CallerRef = make_ref(),
-    async_get(CallerRef, DBHandle, Key, ReadOpts),
-    ?WAIT_FOR_REPLY(CallerRef).
+-spec get(DBHandle, Key, ReadOpts) ->
+    {ok, binary()} | not_found | {error, any()}
+      when
+      DBHandle::db_handle(),
+      Key::binary(),
+      ReadOpts::read_options().
+get(_DBHandle, _Key, _ReadOpts) ->
+    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Retrieve a key/value pair in the specified column family
@@ -350,12 +329,6 @@ get(DBHandle, Key, ReadOpts) ->
 get(_DBHandle, _CFHandle, _Key, _ReadOpts) ->
     {error, not_implemeted}.
 
-async_iterator(_CallerRef, _DBHandle, _ReadOpts) ->
-    erlang:nif_error({error, not_loaded}).
-
-async_iterator(_CallerRef, _DBHandle, _ReadOpts, keys_only) ->
-    erlang:nif_error({error, not_loaded}).
-
 %% @doc
 %% Return a iterator over the contents of the database.
 %% The result of iterator() is initially invalid (caller must
@@ -363,15 +336,11 @@ async_iterator(_CallerRef, _DBHandle, _ReadOpts, keys_only) ->
 -spec(iterator(DBHandle, ReadOpts) ->
              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
                                                       ReadOpts::read_options()).
-iterator(DBHandle, ReadOpts) ->
-    CallerRef = make_ref(),
-    async_iterator(CallerRef, DBHandle, ReadOpts),
-    ?WAIT_FOR_REPLY(CallerRef).
+iterator(_DBHandle, _ReadOpts) ->
+    erlang:nif_error({error, not_loaded}).
 
-iterator(DBHandle, ReadOpts, keys_only) ->
-    CallerRef = make_ref(),
-    async_iterator(CallerRef, DBHandle, ReadOpts, keys_only),
-    ?WAIT_FOR_REPLY(CallerRef).
+iterator(_DBHandle, _ReadOpts, keys_only) ->
+    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Return a iterator over the contents of the specified column family.
@@ -382,8 +351,6 @@ iterator(DBHandle, ReadOpts, keys_only) ->
 iterator_with_cf(_DBHandle, _CFHandle, _ReadOpts) ->
     {error, not_implemeted}.
 
-async_iterator_move(_CallerRef, _ITRHandle, _ITRAction) ->
-    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Move to the specified place
@@ -393,28 +360,14 @@ async_iterator_move(_CallerRef, _ITRHandle, _ITRAction) ->
              {error, invalid_iterator} |
              {error, iterator_closed} when ITRHandle::itr_handle(),
                                            ITRAction::iterator_action()).
-iterator_move(ITRHandle, ITRAction) ->
-    case async_iterator_move(undefined, ITRHandle, ITRAction) of
-        Ref when is_reference(Ref) ->
-            receive
-                {Ref, X} -> X
-            end;
-        {ok, _} = Key -> Key;
-        {ok, _, _} = KeyVal -> KeyVal;
-        ER -> ER
-    end.
-
-async_iterator_close(_CallerRef, _ITRHandle) ->
+iterator_move(_ITRHandle, _ITRAction) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Close a iterator
--spec(iterator_close(ITRHandle) ->
-             ok when ITRHandle::itr_handle()).
-iterator_close(ITRHandle) ->
-    CallerRef = make_ref(),
-    async_iterator_close(CallerRef, ITRHandle),
-    ?WAIT_FOR_REPLY(CallerRef).
+-spec(iterator_close(ITRHandle) -> ok when ITRHandle::itr_handle()).
+iterator_close(_ITRHandle) ->
+    erlang:nif_error({error, not_loaded}).
 
 -type fold_fun() :: fun(({Key::binary(), Value::binary()}, any()) -> any()).
 
@@ -494,19 +447,6 @@ destroy(_Name, _DBOpts) ->
                                       DBOpts::db_options()).
 repair(_Name, _DBOpts) ->
     erlang:nif_error({error, not_loaded}).
-
-
-async_checkpoint(_Callerfef, _DbHandle, _Path) ->
-    erlang:nif_error({error, not_loaded}).
-
-%% @doc take a snapshot of a running RocksDB database in a separate directory
-%% http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
--spec(checkpoint(DbHandle::db_handle(), Path::file:filename_all()) ->
-ok | {error, any()}).
-checkpoint(DbHandle, Path) ->
-    CallerRef = make_ref(),
-    async_checkpoint(CallerRef, DbHandle, Path),
-    ?WAIT_FOR_REPLY(CallerRef).
 
 
 %% @doc

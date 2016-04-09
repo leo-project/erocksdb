@@ -42,44 +42,46 @@
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/slice_transform.h"
+#include "rocksdb/utilities/checkpoint.h"
 
-#ifndef INCL_THREADING_H
-    #include "threading.h"
+#ifndef ERL_NIF_DIRTY_SCHEDULER_SUPPORT
+# error Requires dirty schedulers
 #endif
 
-#ifndef INCL_WORKITEMS_H
-    #include "workitems.h"
+#ifndef INCL_REFOBJECTS_H
+    #include "refobjects.h"
 #endif
 
 #ifndef ATOMS_H
     #include "atoms.h"
 #endif
 
-#include "work_result.hpp"
-
 #include "detail.hpp"
 
 static ErlNifFunc nif_funcs[] =
 {
-    {"close", 1, erocksdb_close},
-    {"iterator_close", 1, erocksdb_iterator_close},
+    // db operations
+    {"close", 1, erocksdb_close, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"open", 3, erocksdb_open, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"status", 2, erocksdb_status},
     {"destroy", 2, erocksdb_destroy},
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
+    {"checkpoint", 2, erocksdb::checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
-    {"async_open", 4, erocksdb::async_open},
-    {"async_write", 4, erocksdb::async_write},
-    {"async_get", 4, erocksdb::async_get},
+    // snaptshot operation
+    {"snapshot", 1, erocksdb::snapshot, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"release_snapshot", 1, erocksdb::release_snapshot, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
-    {"async_snapshot", 2, erocksdb::async_snapshot},
-    {"async_release_snapshot", 2, erocksdb::async_release_snapshot},
-    {"async_checkpoint", 3, erocksdb::async_checkpoint},
+    // K/V operations
+    {"write", 3, erocksdb::write, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get", 3, erocksdb::get, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
-    {"async_iterator", 3, erocksdb::async_iterator},
-    {"async_iterator", 4, erocksdb::async_iterator},
-
-    {"async_iterator_move", 3, erocksdb::async_iterator_move}
+    // Iterators operations
+    {"iterator", 2, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"iterator", 3, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"iterator_close", 1, erocksdb_iterator_close},
+    {"iterator_move", 2, erocksdb::iterator_move, ERL_NIF_DIRTY_JOB_IO_BOUND}
 
 };
 
@@ -272,67 +274,6 @@ static ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, rocksdb::Slice s)
     unsigned char* value = enif_make_new_binary(env, s.size(), &result);
     memcpy(value, s.data(), s.size());
     return result;
-}
-
-/** struct for grabbing erocksdb environment options via fold
- *   ... then loading said options into erocksdb_priv_data
- */
-struct ErocksdbOptions
-{
-    int m_ErocksdbThreads;
-
-    ErocksdbOptions()
-        : m_ErocksdbThreads(71)
-        {};
-
-    void Dump()
-    {
-        syslog(LOG_ERR, "         m_ErocksdbThreads: %d\n", m_ErocksdbThreads);
-    }   // Dump
-};  // struct ErocksdbOptions
-
-
-/** Module-level private data:
- *    singleton instance held by erlang and passed on API calls
- */
-class erocksdb_priv_data
-{
-public:
-    ErocksdbOptions m_Opts;
-    erocksdb::erocksdb_thread_pool thread_pool;
-
-    explicit erocksdb_priv_data(ErocksdbOptions & Options)
-    : m_Opts(Options), thread_pool(Options.m_ErocksdbThreads)
-        {}
-
-private:
-    erocksdb_priv_data();                                      // no default constructor
-    erocksdb_priv_data(const erocksdb_priv_data&);             // nocopy
-    erocksdb_priv_data& operator=(const erocksdb_priv_data&);  // nocopyassign
-
-};
-
-
-ERL_NIF_TERM parse_init_option(ErlNifEnv* env, ERL_NIF_TERM item, ErocksdbOptions& opts)
-{
-    int arity;
-    const ERL_NIF_TERM* option;
-    if (enif_get_tuple(env, item, &arity, &option) && 2==arity)
-    {
-        if (option[0] == erocksdb::ATOM_WRITE_THREADS)
-        {
-            unsigned long temp;
-            if (enif_get_ulong(env, option[1], &temp))
-            {
-                if (temp != 0)
-                {
-                    opts.m_ErocksdbThreads = temp;
-                }   // if
-            }   // if
-        }   // if
-    }
-
-    return erocksdb::ATOM_OK;
 }
 
 ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options& opts)
@@ -891,67 +832,18 @@ ERL_NIF_TERM write_batch_item(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::WriteB
 
 namespace erocksdb {
 
-ERL_NIF_TERM send_reply(ErlNifEnv *env, ERL_NIF_TERM ref, ERL_NIF_TERM reply)
-{
-    ErlNifPid pid;
-    ErlNifEnv *msg_env = enif_alloc_env();
-    ERL_NIF_TERM msg = enif_make_tuple2(msg_env,
-                                        enif_make_copy(msg_env, ref),
-                                        enif_make_copy(msg_env, reply));
-    enif_self(env, &pid);
-    enif_send(env, &pid, msg_env, msg);
-    enif_free_env(msg_env);
-    return ATOM_OK;
-}
 
 ERL_NIF_TERM
-async_open(
+snapshot(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    char db_name[4096];
-
-    if(!enif_get_string(env, argv[1], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
-       !enif_is_list(env, argv[2]) ||
-       !enif_is_list(env, argv[3]))
-    {
-        return enif_make_badarg(env);
-    }   // if
-
-    ERL_NIF_TERM caller_ref = argv[0];
-
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
-
-    rocksdb::Options *opts = new rocksdb::Options;
-    fold(env, argv[2], parse_db_option, *opts);
-    fold(env, argv[3], parse_cf_option, *opts);
-
-    erocksdb::WorkTask *work_item = new erocksdb::OpenTask(env, caller_ref,
-                                                              db_name, opts);
-
-    if(false == priv.thread_pool.submit(work_item))
-    {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
-    }
-
-    return erocksdb::ATOM_OK;
-
-}   // async_open
-
-ERL_NIF_TERM
-async_snapshot(
-    ErlNifEnv* env,
-    int argc,
-    const ERL_NIF_TERM argv[])
-{
-
-    const ERL_NIF_TERM& caller_ref = argv[0];
-    const ERL_NIF_TERM& handle_ref = argv[1];
-
     ReferencePtr<DbObject> db_ptr;
+    SnapshotObject* snapshot_ptr;
+    const rocksdb::Snapshot* snapshot;
+    const ERL_NIF_TERM& handle_ref = argv[0];
+
 
     db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
 
@@ -962,67 +854,58 @@ async_snapshot(
 
     // is this even possible?
     if(NULL == db_ptr->m_Db)
-        return send_reply(env, caller_ref, error_einval(env));
-
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
-
-    erocksdb::WorkTask* work_item = new erocksdb::GetSnapshotTask(env, caller_ref, db_ptr.get());
-
-    if(false == priv.thread_pool.submit(work_item))
     {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+        return error_einval(env);
     }
 
-    return erocksdb::ATOM_OK;
-}   // async_snapshot
+    // create snapshot
+    snapshot = db_ptr->m_Db->GetSnapshot();
+    snapshot_ptr = SnapshotObject::CreateSnapshotObject(db_ptr.get(), snapshot);
+
+    // create a resource reference to send erlang
+    ERL_NIF_TERM result = enif_make_resource(env, snapshot_ptr);
+    // clear the automatic reference from enif_alloc_resource in SnapshotObject
+    enif_release_resource(snapshot_ptr);
+    snapshot = NULL;
+
+    return enif_make_tuple2(env, ATOM_OK, result);
+}   // snapshot
 
 
 ERL_NIF_TERM
-async_release_snapshot(
+release_snapshot(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
 
-    const ERL_NIF_TERM& caller_ref = argv[0];
-    const ERL_NIF_TERM& handle_ref = argv[1];
+    const ERL_NIF_TERM& handle_ref = argv[0];
 
     ReferencePtr<SnapshotObject> snapshot_ptr;
-
     snapshot_ptr.assign(SnapshotObject::RetrieveSnapshotObject(env, handle_ref));
 
     if(NULL==snapshot_ptr.get())
     {
-        return send_reply(env, caller_ref, erocksdb::ATOM_OK);
+        return ATOM_OK;
     }
 
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+    // release snapshot object
+    SnapshotObject* snapshot = snapshot_ptr.get();
+    snapshot->m_DbPtr->m_Db->ReleaseSnapshot(snapshot->m_Snapshot);
 
-    erocksdb::WorkTask* work_item = new erocksdb::ReleaseSnapshotTask(env, caller_ref, snapshot_ptr.get());
+    // set closing flag
+    ErlRefObject::InitiateCloseRequest(snapshot);
 
-    if(false == priv.thread_pool.submit(work_item))
-    {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
-    }
-
-    return erocksdb::ATOM_OK;
-}   // async_snapshot
+    return ATOM_OK;
+}   // release_snapshot
 
 
 ERL_NIF_TERM
-async_write(
-    ErlNifEnv* env,
-    int argc,
-    const ERL_NIF_TERM argv[])
+write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& caller_ref = argv[0];
-    const ERL_NIF_TERM& handle_ref = argv[1];
-    const ERL_NIF_TERM& action_ref = argv[2];
-    const ERL_NIF_TERM& opts_ref   = argv[3];
+    const ERL_NIF_TERM& handle_ref = argv[0];
+    const ERL_NIF_TERM& action_ref = argv[1];
+    const ERL_NIF_TERM& opts_ref   = argv[2];
 
     ReferencePtr<DbObject> db_ptr;
 
@@ -1037,50 +920,45 @@ async_write(
 
     // is this even possible?
     if(NULL == db_ptr->m_Db)
-        return send_reply(env, caller_ref, error_einval(env));
-
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+    {
+        return error_einval(env);
+    }
 
     // Construct a write batch:
     rocksdb::WriteBatch* batch = new rocksdb::WriteBatch;
-
-    // Seed the batch's data:
-    ERL_NIF_TERM result = fold(env, argv[2], write_batch_item, *batch);
-    if(erocksdb::ATOM_OK != result)
+    ERL_NIF_TERM result = fold(env, argv[1], write_batch_item, *batch);
+    if(ATOM_OK != result)
     {
-        return send_reply(env, caller_ref,
-                          enif_make_tuple3(env, erocksdb::ATOM_ERROR, caller_ref,
-                                           enif_make_tuple2(env, erocksdb::ATOM_BAD_WRITE_ACTION,
-                                                            result)));
+        return enif_make_tuple2(env, ATOM_ERROR,
+                enif_make_tuple2(env, ATOM_BAD_WRITE_ACTION, result));
     }   // if
 
     rocksdb::WriteOptions* opts = new rocksdb::WriteOptions;
-    fold(env, argv[3], parse_write_option, *opts);
+    fold(env, argv[2], parse_write_option, *opts);
 
-    erocksdb::WorkTask* work_item = new erocksdb::WriteTask(env, caller_ref,
-                                                            db_ptr.get(), batch, opts);
+    rocksdb::Status status = db_ptr->m_Db->Write(*opts, batch);
 
-    if(false == priv.thread_pool.submit(work_item))
+    delete batch;
+    delete opts;
+
+    if (status.ok())
     {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
-    }   // if
+        return ATOM_OK;
+    }
 
-    return erocksdb::ATOM_OK;
-}
+    return error_tuple(env, ATOM_ERROR, status);
+}   // write
 
 
 ERL_NIF_TERM
-async_get(
+get(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& caller_ref = argv[0];
-    const ERL_NIF_TERM& dbh_ref    = argv[1];
-    const ERL_NIF_TERM& key_ref    = argv[2];
-    const ERL_NIF_TERM& opts_ref   = argv[3];
+    const ERL_NIF_TERM& dbh_ref    = argv[0];
+    const ERL_NIF_TERM& key_ref    = argv[1];
+    const ERL_NIF_TERM& opts_ref   = argv[2];
 
     rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
 
@@ -1095,42 +973,50 @@ async_get(
     }
 
     if(NULL == db_ptr->m_Db)
-        return send_reply(env, caller_ref, error_einval(env));
+    {
+        return error_einval(env);
+    }
 
     ERL_NIF_TERM fold_result;
-
     fold_result = fold(env, opts_ref, parse_read_option, *opts);
-    if(fold_result!=erocksdb::ATOM_OK)
-        return enif_make_badarg(env);
-
-    erocksdb::WorkTask *work_item = new erocksdb::GetTask(env, caller_ref,
-                                                          db_ptr.get(), key_ref, opts);
-
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
-
-    if(false == priv.thread_pool.submit(work_item))
+    if(fold_result!=ATOM_OK)
     {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
-    }   // if
+        return enif_make_badarg(env);
+    }
 
-    return erocksdb::ATOM_OK;
+    // convert key to string
+    ErlNifBinary key;
+    std::string m_Key;
+    enif_inspect_binary(env, key_ref, &key);
+    m_Key.assign((const char *)key.data, key.size);
 
-}   // async_get
+    // get value
+    ERL_NIF_TERM value_bin;
+    std::string value;
+    rocksdb::Slice key_slice(m_Key);
+
+    rocksdb::Status status = db_ptr->m_Db->Get(*opts, key_slice, &value);
+    if (!status.ok())
+    {
+        return ATOM_NOT_FOUND;
+    }
+
+    unsigned char* v = enif_make_new_binary(env, value.size(), &value_bin);
+    memcpy(v, value.c_str(), value.size());
+
+    return enif_make_tuple2(env, ATOM_OK, value_bin);
+}   // get
 
 
 ERL_NIF_TERM
-async_iterator(
+iterator(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& caller_ref  = argv[0];
-    const ERL_NIF_TERM& dbh_ref     = argv[1];
-    const ERL_NIF_TERM& options_ref = argv[2];
-
-    const bool keys_only = ((argc == 4) && (argv[3] == ATOM_KEYS_ONLY));
+    const ERL_NIF_TERM& dbh_ref     = argv[0];
+    const ERL_NIF_TERM& options_ref = argv[1];
+    const bool keys_only = ((argc == 3) && (argv[2] == ATOM_KEYS_ONLY));
 
     rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
 
@@ -1146,228 +1032,133 @@ async_iterator(
 
     // likely useless
     if(NULL == db_ptr->m_Db)
-        return send_reply(env, caller_ref, error_einval(env));
+        return error_einval(env);
 
     ERL_NIF_TERM fold_result;
-
     fold_result = fold(env, options_ref, parse_read_option, *opts);
     if(fold_result!=erocksdb::ATOM_OK)
         return enif_make_badarg(env);
 
-    erocksdb::WorkTask *work_item = new erocksdb::IterTask(env, caller_ref,
-                                                           db_ptr.get(), keys_only, opts);
+    ItrObject * itr_ptr;
+    rocksdb::Iterator * iterator;
 
-    // Now-boilerplate setup (we'll consolidate this pattern soon, I hope):
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+    iterator = db_ptr->m_Db->NewIterator(*opts);
+    itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterator, keys_only, opts);
 
-    if(false == priv.thread_pool.submit(work_item))
-    {
-        delete work_item;
-        return send_reply(env, caller_ref, enif_make_tuple2(env, ATOM_ERROR, caller_ref));
-    }   // if
+    ERL_NIF_TERM result = enif_make_resource(env, itr_ptr);
 
-    return ATOM_OK;
+    // release reference created during CreateItrObject()
+    enif_release_resource(itr_ptr);
+    opts=NULL;  // ptr ownership given to ItrObject
 
-}   // async_iterator
+    return enif_make_tuple2(env, ATOM_OK, result);
+}   // iterator
 
 
 ERL_NIF_TERM
-async_iterator_move(
+iterator_move(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    // const ERL_NIF_TERM& caller_ref       = argv[0];
-    const ERL_NIF_TERM& itr_handle_ref   = argv[1];
-    const ERL_NIF_TERM& action_or_target = argv[2];
-    ERL_NIF_TERM ret_term;
+    const ERL_NIF_TERM& itr_handle_ref   = argv[0];
+    const ERL_NIF_TERM& action_or_target = argv[1];
 
-    bool submit_new_request(true);
 
     ReferencePtr<ItrObject> itr_ptr;
-
     itr_ptr.assign(ItrObject::RetrieveItrObject(env, itr_handle_ref));
 
     if(NULL==itr_ptr.get())
+    {
         return enif_make_badarg(env);
+    }
 
-    // Reuse ref from iterator creation
-    const ERL_NIF_TERM& caller_ref = itr_ptr->m_Iter->itr_ref;
+    rocksdb::Iterator* itr = itr_ptr->m_Iterator;
 
-    /* We can be invoked with two different arities from Erlang. If our "action_atom" parameter is not
-       in fact an atom, then it is actually a seek target. Let's find out which we are: */
-    erocksdb::MoveTask::action_t action = erocksdb::MoveTask::SEEK;
 
-    // If we have an atom, it's one of these (action_or_target's value is ignored):
+
     if(enif_is_atom(env, action_or_target))
     {
-        if(ATOM_FIRST == action_or_target)  action = erocksdb::MoveTask::FIRST;
-        if(ATOM_LAST == action_or_target)   action = erocksdb::MoveTask::LAST;
-        if(ATOM_NEXT == action_or_target)   action = erocksdb::MoveTask::NEXT;
-        if(ATOM_PREV == action_or_target)   action = erocksdb::MoveTask::PREV;
-        // if(ATOM_PREFETCH == action_or_target)   action = erocksdb::MoveTask::PREFETCH;
-    }   // if
-
-
-    //
-    // Three situations:
-    //  #1 not a PREFETCH next call
-    //  #2 PREFETCH call and no prefetch waiting
-    //  #3 PREFETCH call and prefetch is waiting
-
-    // case #1
-    if (erocksdb::MoveTask::PREFETCH != action)
-    {
-        // current move object could still be in later stages of
-        //  worker thread completion ... race condition ...don't reuse
-        itr_ptr->ReleaseReuseMove();
-
-        submit_new_request=true;
-        ret_term = enif_make_copy(env, itr_ptr->m_Iter->itr_ref);
-
-        // force reply to be a message
-        itr_ptr->m_Iter->m_HandoffAtomic=1;
-    }   // if
-
-    // case #2
-    // before we launch a background job for "next iteration", see if there is a
-    //  prefetch waiting for us
-    else if (erocksdb::compare_and_swap(&itr_ptr->m_Iter->m_HandoffAtomic, 0, 1))
-    {
-        // nope, no prefetch ... await a message to erlang queue
-        ret_term = enif_make_copy(env, itr_ptr->m_Iter->itr_ref);
-
-        // is this truly a wait for prefetch ... or actually the first prefetch request
-        if (!itr_ptr->m_Iter->m_PrefetchStarted)
-        {
-            submit_new_request=true;
-            itr_ptr->m_Iter->m_PrefetchStarted=true;
-            itr_ptr->ReleaseReuseMove();
-
-            // first must return via message
-            itr_ptr->m_Iter->m_HandoffAtomic=1;
-        }   // if
-
-        else
-        {
-            // await message that is already in the making
-            submit_new_request=false;
-        }   // else
-    }   // else if
-
-    // case #3
+        if(ATOM_FIRST == action_or_target) itr->SeekToFirst();
+        if(ATOM_LAST == action_or_target) itr->SeekToLast();
+        if(ATOM_NEXT == action_or_target) itr->Next();
+        if(ATOM_PREV == action_or_target) { itr->Prev(); }
+    }
     else
     {
-        // why yes there is.  copy the key/value info into a return tuple before
-        //  we launch the iterator for "next" again
-        if(!itr_ptr->m_Iter->Valid())
-            ret_term=enif_make_tuple2(env, ATOM_ERROR, ATOM_INVALID_ITERATOR);
+        ErlNifBinary key;
+        if(!enif_inspect_binary(env, action_or_target, &key))
+        {
+            return error_einval(env);
+        }
 
-        else if (itr_ptr->m_Iter->m_KeysOnly)
-            ret_term=enif_make_tuple2(env, ATOM_OK, slice_to_binary(env, itr_ptr->m_Iter->key()));
-        else
-            ret_term=enif_make_tuple3(env, ATOM_OK,
-                                      slice_to_binary(env, itr_ptr->m_Iter->key()),
-                                      slice_to_binary(env, itr_ptr->m_Iter->value()));
+        std::string m_Key;
+        m_Key.assign((const char *)key.data, key.size);
+        rocksdb::Slice key_slice(m_Key);
+        itr->Seek(key_slice);
+    }
 
-        // reset for next race
-        itr_ptr->m_Iter->m_HandoffAtomic=0;
-
-        // old MoveItem could still be active on its thread, cannot
-        //  reuse ... but the current Iterator is good
-        itr_ptr->ReleaseReuseMove();
-
-        submit_new_request=true;
-    }   // else
-
-
-    // only build request if actually need to submit it
-    if (submit_new_request)
+    if(!itr->Valid())
     {
-        erocksdb::MoveTask * move_item;
+        return enif_make_tuple2(env, ATOM_ERROR, ATOM_INVALID_ITERATOR);
+    }
 
-        move_item = new erocksdb::MoveTask(env, caller_ref,
-                                           itr_ptr->m_Iter.get(), action);
+    rocksdb::Status status = itr->status();
 
-        // prevent deletes during worker loop
-        move_item->RefInc();
-        itr_ptr->reuse_move=move_item;
+    if(!status.ok())
+    {
+        return error_tuple(env, ATOM_ERROR, status);
+    }
 
-        move_item->action=action;
+    if(itr_ptr->keys_only)
+    {
+        return enif_make_tuple2(env, ATOM_OK, slice_to_binary(env, itr->key()));
+    }
+    else
+    {
+        return enif_make_tuple3(env, ATOM_OK,
+                                slice_to_binary(env, itr->key()),
+                                slice_to_binary(env, itr->value()));
+    }
 
-        if (erocksdb::MoveTask::SEEK == action)
-        {
-            ErlNifBinary key;
-
-            if(!enif_inspect_binary(env, action_or_target, &key))
-            {
-                itr_ptr->ReleaseReuseMove();
-		itr_ptr->reuse_move=NULL;
-                return enif_make_tuple2(env, ATOM_EINVAL, caller_ref);
-            }   // if
-
-            move_item->seek_target.assign((const char *)key.data, key.size);
-        }   // else
-
-        erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
-
-        if(false == priv.thread_pool.submit(move_item))
-        {
-            itr_ptr->ReleaseReuseMove();
-	    itr_ptr->reuse_move=NULL;
-            return enif_make_tuple2(env, ATOM_ERROR, caller_ref);
-        }   // if
-    }   // if
-
-    return ret_term;
-
-}   // async_iter_move
+}   // iter_move
 
 
 ERL_NIF_TERM
-async_checkpoint(
-    ErlNifEnv* env,
-    int argc,
-    const ERL_NIF_TERM argv[])
+checkpoint(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& caller_ref = argv[0];
-    const ERL_NIF_TERM& handle_ref = argv[1];
+    const ERL_NIF_TERM& handle_ref = argv[0];
 
     char path[4096];
-
-
+    rocksdb::Checkpoint* checkpoint;
+    rocksdb::Status status;
     ReferencePtr<DbObject> db_ptr;
 
     db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
-
     if(NULL==db_ptr.get())
     {
         return enif_make_badarg(env);
     }
 
-    // is this even possible?
-    if(NULL == db_ptr->m_Db)
-        return send_reply(env, caller_ref, error_einval(env));
-
-    if(!enif_get_string(env, argv[2], path, sizeof(path), ERL_NIF_LATIN1))
+    if(!enif_get_string(env, argv[1], path, sizeof(path), ERL_NIF_LATIN1))
     {
         return enif_make_badarg(env);
     }
 
-    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+    status = rocksdb::Checkpoint::Create(db_ptr->m_Db, &checkpoint);
 
-    erocksdb::WorkTask* work_item = new erocksdb::CheckpointTask(env, caller_ref, db_ptr.get(), path);
-
-    if(false == priv.thread_pool.submit(work_item))
+    if (status.ok())
     {
-        delete work_item;
-        return send_reply(env, caller_ref,
-                          enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+        status = checkpoint->CreateCheckpoint(path);
+        if (status.ok())
+        {
+            return ATOM_OK;
+        }
     }
+    delete checkpoint;
 
-    return erocksdb::ATOM_OK;
-
-}   // async_checkpoint
+    return error_tuple(env, ATOM_ERROR, status);
+}   // checkpoint
 
 
 } // namespace erocksdb
@@ -1376,6 +1167,40 @@ async_checkpoint(
 /***
  * HEY YOU, please convert this to an async operation
  */
+
+ERL_NIF_TERM
+erocksdb_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    char db_name[4096];
+    erocksdb::DbObject * db_ptr;
+    rocksdb::DB *db(0);
+
+    if(!enif_get_string(env, argv[0], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
+       !enif_is_list(env, argv[1]) ||
+       !enif_is_list(env, argv[2]))
+    {
+        return enif_make_badarg(env);
+    }
+
+    rocksdb::Options *opts = new rocksdb::Options;
+    fold(env, argv[1], parse_db_option, *opts);
+    fold(env, argv[2], parse_cf_option, *opts);
+
+    rocksdb::Status status = rocksdb::DB::Open(*opts, db_name, &db);
+
+    if(!status.ok())
+        return error_tuple(env, erocksdb::ATOM_ERROR_DB_OPEN, status);
+
+    db_ptr = erocksdb::DbObject::CreateDbObject(db, opts);
+
+    // create a resource reference to send erlang
+    ERL_NIF_TERM result = enif_make_resource(env, db_ptr);
+    // clear the automatic reference from enif_alloc_resource in CreateDbObject
+    enif_release_resource(db_ptr);
+
+    return enif_make_tuple2(env, erocksdb::ATOM_OK, result);
+} // erocksdb_open
+
 
 ERL_NIF_TERM
 erocksdb_close(
@@ -1424,8 +1249,6 @@ erocksdb_iterator_close(
 
     if (NULL!=itr_ptr)
     {
-        itr_ptr->ReleaseReuseMove();
-
         // set closing flag ... atomic likely unnecessary (but safer)
         erocksdb::ErlRefObject::InitiateCloseRequest(itr_ptr);
 
@@ -1591,19 +1414,12 @@ erocksdb_is_empty(
 
 static void on_unload(ErlNifEnv *env, void *priv_data)
 {
-    erocksdb_priv_data *p = static_cast<erocksdb_priv_data *>(priv_data);
-    delete p;
 }
 
 
 static int on_load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
 try
 {
-    int ret_val;
-
-    ret_val=0;
-    *priv_data = NULL;
-
     // inform erlang of our two resource types
     erocksdb::DbObject::CreateDbObjectType(env);
     erocksdb::ItrObject::CreateItrObjectType(env);
@@ -1767,28 +1583,7 @@ try
 #undef ATOM
 
 
-    // read options that apply to global erocksdb environment
-    if(enif_is_list(env, load_info))
-    {
-        ErocksdbOptions load_options;
-
-        fold(env, load_info, parse_init_option, load_options);
-
-        /* Spin up the thread pool, set up all private data: */
-        erocksdb_priv_data *priv = new erocksdb_priv_data(load_options);
-
-        *priv_data = priv;
-
-    }   // if
-
-    else
-    {
-        // anything non-zero is "fail"
-        ret_val=1;
-    }   // else
-    // Initialize common atoms
-
-    return ret_val;
+    return 0;
 }
 
 

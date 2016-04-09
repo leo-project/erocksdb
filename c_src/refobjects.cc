@@ -19,17 +19,12 @@
 // under the License.
 //
 // -------------------------------------------------------------------
-#ifndef __EROCKSDB_DETAIL_HPP
-    #include "detail.hpp"
-#endif
 
 #ifndef INCL_REFOBJECTS_H
     #include "refobjects.h"
 #endif
 
-#ifndef INCL_WORKITEMS_H
-    #include "workitems.h"
-#endif
+
 
 #include "rocksdb/cache.h"
 #include "rocksdb/filter_policy.h"
@@ -575,6 +570,7 @@ ItrObject::CreateItrObjectType(
 ItrObject *
 ItrObject::CreateItrObject(
     DbObject * DbPtr,
+    rocksdb::Iterator * Iterator,
     bool KeysOnly,
     rocksdb::ReadOptions * Options)
 {
@@ -584,7 +580,7 @@ ItrObject::CreateItrObject(
     // the alloc call initializes the reference count to "one"
     alloc_ptr=enif_alloc_resource(m_Itr_RESOURCE, sizeof(ItrObject));
 
-    ret_ptr=new (alloc_ptr) ItrObject(DbPtr, KeysOnly, Options);
+    ret_ptr=new (alloc_ptr) ItrObject(DbPtr, Iterator, KeysOnly, Options);
 
     // manual reference increase to keep active until "close" called
     //  only inc local counter
@@ -646,9 +642,10 @@ ItrObject::ItrObjectResourceCleanup(
 
 ItrObject::ItrObject(
     DbObject * DbPtr,
+    rocksdb::Iterator * Iterator,
     bool KeysOnly,
     rocksdb::ReadOptions * Options)
-    : keys_only(KeysOnly), m_ReadOptions(Options), reuse_move(NULL), m_DbPtr(DbPtr)
+    : m_ReadOptions(Options), keys_only(KeysOnly), m_Iterator(Iterator), m_DbPtr(DbPtr)
 {
     if (NULL!=DbPtr)
         DbPtr->AddReference(this);
@@ -660,7 +657,6 @@ ItrObject::~ItrObject()
 {
     // not likely to have active reuse item since it would
     //  block destruction
-    ReleaseReuseMove();
 
     delete m_ReadOptions;
 
@@ -680,33 +676,11 @@ ItrObject::Shutdown()
     // if there is an active move object, set it up to delete
     //  (reuse_move holds a counter to this object, which will
     //   release when move object destructs)
-    ReleaseReuseMove();
-
     RefDec();
 
     return;
 
 }   // ItrObject::CloseRequest
-
-
-bool
-ItrObject::ReleaseReuseMove()
-{
-    MoveTask * ptr;
-
-    // move pointer off ItrObject first, then decrement ...
-    //  otherwise there is potential for infinite loop
-    ptr=(MoveTask *)reuse_move;
-    if (compare_and_swap(&reuse_move, ptr, (MoveTask *)NULL)
-        && NULL!=ptr)
-    {
-        ptr->RefDec();
-    }   // if
-
-    return(NULL!=ptr);
-
-}   // ItrObject::ReleaseReuseMove()
-
 
 } // namespace erocksdb
 

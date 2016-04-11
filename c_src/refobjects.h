@@ -302,7 +302,6 @@ private:
 class ItrObject : public ErlRefObject
 {
 public:
-    rocksdb::ReadOptions * m_ReadOptions;
     bool keys_only;
     rocksdb::Iterator * m_Iterator;
     ReferencePtr<DbObject> m_DbPtr;
@@ -311,7 +310,7 @@ protected:
     static ErlNifResourceType* m_Itr_RESOURCE;
 
 public:
-    ItrObject(DbObject *, rocksdb::Iterator * Iterator, bool key_only, rocksdb::ReadOptions *);
+    ItrObject(DbObject *, rocksdb::Iterator * Iterator, bool key_only);
 
     virtual ~ItrObject(); // needs to perform free_itr
 
@@ -320,7 +319,7 @@ public:
     static void CreateItrObjectType(ErlNifEnv * Env);
 
     static ItrObject * CreateItrObject(DbObject * Db,  rocksdb::Iterator * Iterator,
-                                       bool KeysOnly, rocksdb::ReadOptions * Options);
+                                       bool KeysOnly);
 
     static ItrObject * RetrieveItrObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerm,
                                          bool ItrClosing=false);

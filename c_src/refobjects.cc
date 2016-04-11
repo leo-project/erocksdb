@@ -742,8 +742,7 @@ ItrObject *
 ItrObject::CreateItrObject(
     DbObject * DbPtr,
     rocksdb::Iterator * Iterator,
-    bool KeysOnly,
-    rocksdb::ReadOptions * Options)
+    bool KeysOnly)
 {
     ItrObject * ret_ptr;
     void * alloc_ptr;
@@ -751,7 +750,7 @@ ItrObject::CreateItrObject(
     // the alloc call initializes the reference count to "one"
     alloc_ptr=enif_alloc_resource(m_Itr_RESOURCE, sizeof(ItrObject));
 
-    ret_ptr=new (alloc_ptr) ItrObject(DbPtr, Iterator, KeysOnly, Options);
+    ret_ptr=new (alloc_ptr) ItrObject(DbPtr, Iterator, KeysOnly);
 
     // manual reference increase to keep active until "close" called
     //  only inc local counter
@@ -814,9 +813,8 @@ ItrObject::ItrObjectResourceCleanup(
 ItrObject::ItrObject(
     DbObject * DbPtr,
     rocksdb::Iterator * Iterator,
-    bool KeysOnly,
-    rocksdb::ReadOptions * Options)
-    : m_ReadOptions(Options), keys_only(KeysOnly), m_Iterator(Iterator), m_DbPtr(DbPtr)
+    bool KeysOnly)
+    : keys_only(KeysOnly), m_Iterator(Iterator), m_DbPtr(DbPtr)
 {
     if (NULL!=DbPtr)
         DbPtr->AddReference(this);
@@ -828,8 +826,6 @@ ItrObject::~ItrObject()
 {
     // not likely to have active reuse item since it would
     //  block destruction
-
-    delete m_ReadOptions;
 
     if (NULL!=m_DbPtr.get())
         m_DbPtr->RemoveReference(this);

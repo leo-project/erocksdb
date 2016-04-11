@@ -28,7 +28,7 @@
 -export([list_column_families/2,create_column_family/3, drop_column_family/1]).
 -export([snapshot/1, release_snapshot/1]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
--export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
+-export([iterator/2, iterator/3, iterators/3, iterators/4, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
 -export([checkpoint/2]).
@@ -346,12 +346,16 @@ iterator(_DBHandle, _ReadOpts, keys_only) ->
 
 %% @doc
 %% Return a iterator over the contents of the specified column family.
--spec(iterator_with_cf(DBHandle, CFHandle, ReadOpts) ->
+-spec(iterators(DBHandle, CFHandle, ReadOpts) ->
              {ok, itr_handle()} | {error, any()} when DBHandle::db_handle(),
                                                       CFHandle::cf_handle(),
                                                       ReadOpts::read_options()).
-iterator_with_cf(_DBHandle, _CFHandle, _ReadOpts) ->
-    {error, not_implemeted}.
+iterators(_DBHandle, _CFHandle, _ReadOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
+iterators(_DBHandle, _CFHandle, _ReadOpts, keys_only) ->
+    erlang:nif_error({error, not_loaded}).
+
 
 
 %% @doc

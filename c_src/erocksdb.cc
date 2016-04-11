@@ -87,6 +87,8 @@ static ErlNifFunc nif_funcs[] =
     // Iterators operations
     {"iterator", 2, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"iterator", 3, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"iterators", 3, erocksdb::iterators, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"iterators", 4, erocksdb::iterators, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"iterator_close", 1, erocksdb_iterator_close},
     {"iterator_move", 2, erocksdb::iterator_move, ERL_NIF_DIRTY_JOB_IO_BOUND}
 
@@ -1265,7 +1267,6 @@ get(
         status = db_ptr->m_Db->Get(*opts, cf->m_ColumnFamily, key_slice, &value);
     }
 
-
     if (!status.ok())
     {
         return ATOM_NOT_FOUND;
@@ -1293,7 +1294,6 @@ iterator(
     ReferencePtr<DbObject> db_ptr;
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
 
-
     if(NULL==db_ptr.get()
        || !enif_is_list(env, options_ref))
      {
@@ -1313,7 +1313,7 @@ iterator(
     rocksdb::Iterator * iterator;
 
     iterator = db_ptr->m_Db->NewIterator(*opts);
-    itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterator, keys_only, opts);
+    itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterator, keys_only);
 
     ERL_NIF_TERM result = enif_make_resource(env, itr_ptr);
 
@@ -1323,6 +1323,70 @@ iterator(
 
     return enif_make_tuple2(env, ATOM_OK, result);
 }   // iterator
+
+ERL_NIF_TERM
+iterators(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+
+    const ERL_NIF_TERM& dbh_ref     = argv[0];
+    const ERL_NIF_TERM& cfs_ref = argv[1];
+    const ERL_NIF_TERM& options_ref = argv[2];
+    const bool keys_only = ((argc == 4) && (argv[3] == ATOM_KEYS_ONLY));
+
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
+
+    ReferencePtr<DbObject> db_ptr;
+    db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
+
+
+    if(NULL==db_ptr.get() ||
+       !enif_is_list(env, options_ref) ||
+       !enif_is_list(env, cfs_ref))
+    {
+       return enif_make_badarg(env);
+    }
+
+    if(NULL == db_ptr->m_Db)
+        return error_einval(env);
+
+    // parse options
+    fold(env, options_ref, parse_read_option, *opts);
+    std::vector<rocksdb::ColumnFamilyHandle*> column_families;
+
+    ERL_NIF_TERM head, tail = cfs_ref;
+    while(enif_get_list_cell(env, tail, &head, &tail))
+    {
+
+        ReferencePtr<ColumnFamilyObject> cf_ptr;
+        cf_ptr.assign(ColumnFamilyObject::RetrieveColumnFamilyObject(env, head));
+        ColumnFamilyObject* cf = cf_ptr.get();
+        column_families.push_back(cf->m_ColumnFamily);
+    }
+
+    std::vector<rocksdb::Iterator*> iterators;
+    db_ptr->m_Db->NewIterators(*opts, column_families, &iterators);
+
+    ERL_NIF_TERM result = enif_make_list(env, 0);
+    try {
+        for (size_t i = 0; i < iterators.size(); i++) {
+            ItrObject * itr_ptr;
+            itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterators[i], keys_only);
+            ERL_NIF_TERM itr_res = enif_make_resource(env, itr_ptr);
+            result = enif_make_list_cell(env, itr_res, result);
+            enif_release_resource(itr_ptr);
+        }
+    } catch (const std::exception& e) {
+        // pass through and return nullptr
+    }
+    opts=NULL;
+    ERL_NIF_TERM result_out;
+    enif_make_reverse_list(env, result, &result_out);
+
+    return enif_make_tuple2(env, erocksdb::ATOM_OK, result_out);
+}
 
 
 ERL_NIF_TERM
@@ -1637,9 +1701,6 @@ erocksdb_close(
     ERL_NIF_TERM ret_term;
 
     ret_term=erocksdb::ATOM_OK;
-
-
-
     db_ptr=erocksdb::DbObject::RetrieveDbObject(env, argv[0]);
 
     if (NULL!=db_ptr)

@@ -1355,15 +1355,16 @@ iterators(
     // parse options
     fold(env, options_ref, parse_read_option, *opts);
     std::vector<rocksdb::ColumnFamilyHandle*> column_families;
+    std::vector<ColumnFamilyObject*> cf_objects;
 
     ERL_NIF_TERM head, tail = cfs_ref;
     while(enif_get_list_cell(env, tail, &head, &tail))
     {
-
         ReferencePtr<ColumnFamilyObject> cf_ptr;
         cf_ptr.assign(ColumnFamilyObject::RetrieveColumnFamilyObject(env, head));
         ColumnFamilyObject* cf = cf_ptr.get();
         column_families.push_back(cf->m_ColumnFamily);
+        cf_objects.push_back(cf);
     }
 
     std::vector<rocksdb::Iterator*> iterators;
@@ -1373,7 +1374,8 @@ iterators(
     try {
         for (size_t i = 0; i < iterators.size(); i++) {
             ItrObject * itr_ptr;
-            itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterators[i], keys_only);
+            ColumnFamilyObject* cf = cf_objects[i];
+            itr_ptr = ItrObject::CreateItrObject(db_ptr.get(), iterators[i], keys_only, cf);
             ERL_NIF_TERM itr_res = enif_make_resource(env, itr_ptr);
             result = enif_make_list_cell(env, itr_res, result);
             enif_release_resource(itr_ptr);

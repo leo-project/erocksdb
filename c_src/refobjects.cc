@@ -582,11 +582,61 @@ ColumnFamilyObject::~ColumnFamilyObject()
 void
 ColumnFamilyObject::Shutdown()
 {
-    RefDec();
+#if 1
+    bool again;
+    ItrObject * itr_ptr;
 
+    do
+    {
+        again=false;
+        itr_ptr=NULL;
+
+        // lock the ItrList
+        {
+            MutexLock lock(m_ItrMutex);
+
+            if (!m_ItrList.empty())
+            {
+                again=true;
+                itr_ptr=m_ItrList.front();
+                m_ItrList.pop_front();
+            }   // if
+        }
+
+        // must be outside lock so ItrObject can attempt
+        //  RemoveReference
+        if (again)
+            ItrObject::InitiateCloseRequest(itr_ptr);
+
+    } while(again);
+#endif
+
+    RefDec();
     return;
 }   // ColumnFamilyObject::CloseRequest
 
+
+void
+ColumnFamilyObject::AddItrReference(
+    ItrObject * ItrPtr)
+{
+    MutexLock lock(m_ItrMutex);
+    m_ItrList.push_back(ItrPtr);
+    return;
+}   // DbObject::AddReference
+
+
+void
+ColumnFamilyObject::RemoveItrReference(
+    ItrObject * ItrPtr)
+{
+    MutexLock lock(m_ItrMutex);
+
+    m_ItrList.remove(ItrPtr);
+
+    return;
+
+}   // DbObject::RemoveReference
 
 /**
  * snapshot object
@@ -762,6 +812,31 @@ ItrObject::CreateItrObject(
 
 }   // ItrObject::CreateItrObject
 
+ItrObject *
+ItrObject::CreateItrObject(
+    DbObject * DbPtr,
+    rocksdb::Iterator * Iterator,
+    bool KeysOnly,
+    ColumnFamilyObject * ColumnFamilyPtr)
+{
+    ItrObject * ret_ptr;
+    void * alloc_ptr;
+
+    // the alloc call initializes the reference count to "one"
+    alloc_ptr=enif_alloc_resource(m_Itr_RESOURCE, sizeof(ItrObject));
+
+    ret_ptr=new (alloc_ptr) ItrObject(DbPtr, Iterator, KeysOnly, ColumnFamilyPtr);
+
+    // manual reference increase to keep active until "close" called
+    //  only inc local counter
+    ret_ptr->RefInc();
+
+    // see IterTask::operator() for release of reference count
+
+    return(ret_ptr);
+
+}   // ItrObject::CreateItrObject
+
 
 ItrObject *
 ItrObject::RetrieveItrObject(
@@ -822,6 +897,23 @@ ItrObject::ItrObject(
 }   // ItrObject::ItrObject
 
 
+ItrObject::ItrObject(
+    DbObject * DbPtr,
+    rocksdb::Iterator * Iterator,
+    bool KeysOnly,
+    ColumnFamilyObject * ColumnFamilyPtr)
+    : m_ColumnFamilyPtr(ColumnFamilyPtr), keys_only(KeysOnly), m_Iterator(Iterator), m_DbPtr(DbPtr)
+{
+    if (NULL!=DbPtr)
+        DbPtr->AddReference(this);
+
+    if (NULL!=ColumnFamilyPtr)
+        m_ColumnFamilyPtr->AddItrReference(this);
+
+}   // ItrObject::ItrObject
+
+
+
 ItrObject::~ItrObject()
 {
     // not likely to have active reuse item since it would
@@ -829,6 +921,9 @@ ItrObject::~ItrObject()
 
     if (NULL!=m_DbPtr.get())
         m_DbPtr->RemoveReference(this);
+
+    if (NULL!=m_ColumnFamilyPtr.get())
+        m_ColumnFamilyPtr->RemoveItrReference(this);
 
     // do not clean up m_CloseMutex and m_CloseCond
 

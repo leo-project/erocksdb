@@ -96,3 +96,25 @@ iterators_test() ->
     after
         erocksdb:close(Ref)
     end.
+
+iterators_drop_column_test() ->
+    os:cmd("rm -rf ltest"),  % NOTE
+    {ok, Ref, [DefaultH]} = erocksdb:open_with_cf("ltest", [{create_if_missing, true}], [{"default", []}]),
+    {ok, TestH} = erocksdb:create_column_family(Ref, "test", []),
+    try
+        erocksdb:put(Ref, DefaultH, <<"a">>, <<"x">>, []),
+        erocksdb:put(Ref, DefaultH, <<"b">>, <<"y">>, []),
+        erocksdb:put(Ref, TestH, <<"a">>, <<"x1">>, []),
+        erocksdb:put(Ref, TestH, <<"b">>, <<"y1">>, []),
+
+        {ok, [DefaultIt, TestIt]} = erocksdb:iterators(Ref, [DefaultH, TestH], []),
+        ?assertEqual({ok, <<"a">>, <<"x">>},erocksdb:iterator_move(DefaultIt, <<>>)),
+        ?assertEqual({ok, <<"a">>, <<"x1">>},erocksdb:iterator_move(TestIt, <<>>)),
+        ?assertEqual({ok, <<"b">>, <<"y">>},erocksdb:iterator_move(DefaultIt, next)),
+        ?assertEqual({ok, <<"b">>, <<"y1">>},erocksdb:iterator_move(TestIt, next)),
+        ?assertEqual({ok, <<"a">>, <<"x">>},erocksdb:iterator_move(DefaultIt, prev)),
+        ok = erocksdb:drop_column_family(TestH),
+        ?assertError(badarg, erocksdb:iterator_move(TestIt, prev))
+    after
+        erocksdb:close(Ref)
+    end.

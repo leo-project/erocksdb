@@ -279,8 +279,8 @@ put(DBHandle, Key, Value, WriteOpts) ->
                                       Key::binary(),
                                       Value::binary(),
                                       WriteOpts::write_options()).
-put(_DBHandle, _CFHandle, _Key, _Value, _WriteOpts) ->
-    {error, not_implemeted}.
+put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
+    write(DBHandle, [{put, CFHandle, Key, Value}], WriteOpts).
 
 %% @doc
 %% Delete a key/value pair in the default column family
@@ -298,8 +298,8 @@ delete(DBHandle, Key, WriteOpts) ->
                                       CFHandle::cf_handle(),
                                       Key::binary(),
                                       WriteOpts::write_options()).
-delete(_DBHandle, _CFHandle, _Key, _WriteOpts) ->
-    {error, not_implemeted}.
+delete(DBHandle, CFHandle, Key, WriteOpts) ->
+    write(DBHandle, [{delete, CFHandle, Key}], WriteOpts).
 
 %% @doc
 %% Apply the specified updates to the database.
@@ -329,7 +329,7 @@ get(_DBHandle, _Key, _ReadOpts) ->
                                                               Key::binary(),
                                                               ReadOpts::read_options()).
 get(_DBHandle, _CFHandle, _Key, _ReadOpts) ->
-    {error, not_implemeted}.
+    erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Return a iterator over the contents of the database.

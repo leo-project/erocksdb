@@ -24,9 +24,9 @@
 %%======================================================================
 -module(erocksdb).
 
--export([open/3, open_with_cf/3, close/1]).
+-export([open/2, open/3, open_with_cf/3, close/1]).
+-export([list_column_families/2,create_column_family/3, drop_column_family/1]).
 -export([snapshot/1, release_snapshot/1]).
--export([list_column_families/2, create_column_family/3, drop_column_family/2]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
 -export([iterator/2, iterator/3, iterator_with_cf/3, iterator_move/2, iterator_close/1]).
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
@@ -194,18 +194,17 @@ init() ->
              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options()).
-open(_Name, _DBOpts, _CFOpts) ->
+
+open(_Name, _DbOpts) ->
     erlang:nif_error({error, not_loaded}).
 
-%% @doc
-%% Open RocksDB with the specified column families
--spec(open_with_cf(Name, DBOpts, CFDescriptors) ->
-             {ok, db_handle(), list(cf_handle())} | {error, any()}
-               when Name::file:filename_all(),
-                    DBOpts :: db_options(),
-                    CFDescriptors :: list(#cf_descriptor{})).
-open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
-    {error, not_implemeted}.
+open(Name, DbOpts, CfDescriptors) ->
+    open(Name, DbOpts ++ CfDescriptors).
+
+open_with_cf(_Name, _DbOpts, _CfDescriptors) ->
+    erlang:nif_error({error, not_loaded}).
+
+
 
 %% @doc
 %% Close RocksDB
@@ -213,6 +212,32 @@ open_with_cf(_Name, _DBOpts, _CFDescriptors) ->
              ok | {error, any()} when DBHandle::db_handle()).
 close(_DBHandle) ->
     erlang:nif_error({error, not_loaded}).
+
+%% @doc List column families
+-spec(list_column_families(Name, DBOpts) -> {ok, list(string())} | {error, any()}
+        when Name::file:filename_all(),
+             DBOpts::db_options()).
+list_column_families(_Name, _DbOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
+
+%% @doc
+%% Create a new column family
+-spec(create_column_family(DBHandle, Name, CFOpts) ->
+             {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
+                                                     Name::string(),
+                                                     CFOpts::cf_options()).
+create_column_family(_DBHandle, _Name, _CFOpts) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc
+%% Drop a column family
+-spec(drop_column_family(CFHandle) ->
+             ok | {error, any()} when  CFHandle::cf_handle()).
+drop_column_family(_CFHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
+
 
 %% @doc take a snapshot of a running RocksDB database in a separate directory
 %% http://rocksdb.org/blog/2609/use-checkpoints-for-efficient-snapshots/
@@ -234,30 +259,7 @@ snapshot(_DbHandle) ->
 release_snapshot(_SnapshotHandle) ->
     erlang:nif_error({error, not_loaded}).
 
-%% @doc
-%% List column families
--spec(list_column_families(Name, DBOpts) ->
-             {ok, list(string())} | {error, any()} when Name::file:filename_all(),
-                                                        DBOpts::db_options()).
-list_column_families(_Name, _DBOpts) ->
-    {error, not_implemeted}.
 
-%% @doc
-%% Create a new column family
--spec(create_column_family(DBHandle, Name, CFOpts) ->
-             {ok, cf_handle()} | {error, any()} when DBHandle::db_handle(),
-                                                     Name::string(),
-                                                     CFOpts::cf_options()).
-create_column_family(_DBHandle, _Name, _CFOpts) ->
-    {error, not_implemeted}.
-
-%% @doc
-%% Drop a column family
--spec(drop_column_family(DBHandle, CFHandle) ->
-             ok | {error, any()} when DBHandle::db_handle(),
-                                      CFHandle::cf_handle()).
-drop_column_family(_DBHandle, _CFHandle) ->
-    {error, not_implemeted}.
 
 %% @doc
 %% Put a key/value pair into the default column family

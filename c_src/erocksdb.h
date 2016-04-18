@@ -82,10 +82,6 @@ rocksdb::Options& opts);
 
 ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item,
 rocksdb::ColumnFamilyOptions& opts);
-ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item,
-rocksdb::ReadOptions& opts);
-ERL_NIF_TERM parse_write_option(ErlNifEnv* env, ERL_NIF_TERM item,
-rocksdb::WriteOptions& opts);
 
 #endif
 

@@ -40,6 +40,10 @@
     #include "util.h"
 #endif
 
+#ifndef INCL_EROCKSB_KV_H
+    #include "erocksdb_kv.h"
+#endif
+
 
 namespace erocksdb {
 

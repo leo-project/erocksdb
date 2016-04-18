@@ -22,6 +22,9 @@
 #ifndef INCL_EROCKSDB_H
 #define INCL_EROCKSDB_H
 
+
+#include "rocksdb/db.h"
+
 extern "C" {
 
 #include "erl_nif.h"
@@ -60,10 +63,19 @@ ERL_NIF_TERM iterator(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM iterators(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM iterator_move(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
+ERL_NIF_TERM list_column_families(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM create_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM drop_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 
 } // namespace erocksdb
 
 
+
+ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item,
+rocksdb::Options& opts);
+
+ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item,
+rocksdb::ColumnFamilyOptions& opts);
+
 #endif
+

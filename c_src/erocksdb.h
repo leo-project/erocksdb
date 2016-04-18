@@ -36,10 +36,14 @@ ERL_NIF_TERM erocksdb_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 ERL_NIF_TERM erocksdb_snapshot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_release_snapshot(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_get(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+
+
 ERL_NIF_TERM erocksdb_iterator(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_iterators(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_iterator_move(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_iterator_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+
+
 ERL_NIF_TERM erocksdb_status(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_destroy(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM erocksdb_repair(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
@@ -62,6 +66,8 @@ ERL_NIF_TERM get(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM iterator(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM iterators(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM iterator_move(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+ERL_NIF_TERM iterator_close(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
+
 
 ERL_NIF_TERM list_column_families(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
 ERL_NIF_TERM create_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
@@ -76,6 +82,10 @@ rocksdb::Options& opts);
 
 ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item,
 rocksdb::ColumnFamilyOptions& opts);
+ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item,
+rocksdb::ReadOptions& opts);
+ERL_NIF_TERM parse_write_option(ErlNifEnv* env, ERL_NIF_TERM item,
+rocksdb::WriteOptions& opts);
 
 #endif
 

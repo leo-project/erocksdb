@@ -13,7 +13,7 @@ SCRIPT=$SCRIPTPATH/${0##*/}
 BASEDIR=$SCRIPTPATH
 BUILD_CONFIG=$BASEDIR/rocksdb/make_config.mk
 
-ROCKSDB_VSN="1a2cc27e013b561c9d3c8b81384d14443822057f"
+ROCKSDB_VSN="4.4.1"
 SNAPPY_VSN="1.1.1"
 
 set -e
@@ -57,7 +57,7 @@ case "$1" in
 
     get-deps)
         if [ ! -d rocksdb ]; then
-            ROCKSDBURL="https://github.com/facebook/rocksdb/archive/$ROCKSDB_VSN.tar.gz"
+            ROCKSDBURL="https://github.com/facebook/rocksdb/archive/v$ROCKSDB_VSN.tar.gz"
             ROCKSDBTARGZ="rocksdb-$ROCKSDB_VSN.tar.gz"
             echo Downloading $ROCKSDBURL...
             curl -L -o $ROCKSDBTARGZ $ROCKSDBURL

@@ -885,8 +885,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ColumnF
         else if (option[0] == erocksdb::ATOM_IN_MEMORY_MODE) {
             if (option[1] == erocksdb::ATOM_TRUE) {
                 // Set recommended defaults
-                opts.prefix_extractor = std::shared_ptr<const rocksdb::SliceTransform>(
-                        rocksdb::NewFixedPrefixTransform(10));
+                opts.prefix_extractor = std::shared_ptr<const rocksdb::SliceTransform>(rocksdb::NewFixedPrefixTransform(10));
                 opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewPlainTableFactory());
                 opts.compression = rocksdb::CompressionType::kNoCompression;
                 opts.memtable_prefix_bloom_bits = 10000000;
@@ -984,11 +983,17 @@ parse_cf_descriptor(ErlNifEnv* env, ERL_NIF_TERM item,
 ERL_NIF_TERM
 erocksdb_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    char db_name[4096];
+    char dir[4096];
     erocksdb::DbObject * db_ptr;
     rocksdb::DB *db(0);
+    unsigned int dir_len;
 
-    if(!enif_get_string(env, argv[0], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
+    if(!enif_get_list_length(env, argv[0], &dir_len))
+    {
+        return enif_make_badarg(env);
+    }
+
+    if(!enif_get_string(env, argv[0], dir, sizeof(dir), ERL_NIF_LATIN1) ||
        !enif_is_list(env, argv[1]))
     {
         return enif_make_badarg(env);
@@ -1003,7 +1008,14 @@ erocksdb_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     rocksdb::Options *opts = new rocksdb::Options;
     fold(env, argv[1], parse_db_option, *opts);
 
-    rocksdb::Status status = rocksdb::DB::Open(*opts, db_name, &db);
+    // check if we open a database in memory
+    if ((dir_len == 0) || ((std::string)dir ==  "mem"))
+    {
+        opts->env = rocksdb::NewMemEnv(rocksdb::Env::Default());
+        opts->create_if_missing = true;
+    }
+
+    rocksdb::Status status = rocksdb::DB::Open(*opts, dir, &db);
     if(!status.ok())
         return error_tuple(env, erocksdb::ATOM_ERROR_DB_OPEN, status);
 
@@ -1011,8 +1023,6 @@ erocksdb_open(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     ERL_NIF_TERM result = enif_make_resource(env, db_ptr);
     enif_release_resource(db_ptr);
     return enif_make_tuple2(env, erocksdb::ATOM_OK, result);
-
-
 } // erocksdb_open
 
 ERL_NIF_TERM
@@ -1021,6 +1031,7 @@ erocksdb_open_with_cf(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     char db_name[4096];
     erocksdb::DbObject * db_ptr;
     rocksdb::DB *db(0);
+
 
     if(!enif_get_string(env, argv[0], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
        !enif_is_list(env, argv[1]) || !enif_is_list(env, argv[2]))

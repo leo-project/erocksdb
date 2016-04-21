@@ -211,8 +211,6 @@ iterator_move(
 
     rocksdb::Iterator* itr = itr_ptr->m_Iterator;
 
-
-
     if(enif_is_atom(env, action_or_target))
     {
         if(ATOM_FIRST == action_or_target) itr->SeekToFirst();

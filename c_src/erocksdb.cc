@@ -67,6 +67,7 @@ static ErlNifFunc nif_funcs[] =
     {"destroy", 2, erocksdb_destroy},
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
+    {"async_flush", 2, erocksdb_flush},
 
     {"async_open", 4, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
@@ -1408,6 +1409,35 @@ erocksdb_close(
 
 }  // erocksdb_close
 
+
+ERL_NIF_TERM
+erocksdb_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    erocksdb::ReferencePtr<erocksdb::DbObject> db_ptr;
+    db_ptr.assign(erocksdb::DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+        return enif_make_badarg(env);
+
+    if(db_ptr->m_Db == NULL)
+        return error_einval(env);
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::FlushTask(env, caller_ref, db_ptr.get());
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return erocksdb::send_reply(env, caller_ref,
+                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+} // erocksdb_flush
 
 ERL_NIF_TERM
 erocksdb_iterator_close(

@@ -241,6 +241,40 @@ public:
 
 };  // class CheckpointTask
 
+
+/**
+ * Background object for to flush
+ */
+
+class FlushTask : public WorkTask
+{
+
+public:
+    FlushTask(ErlNifEnv *_caller_env,
+                    ERL_NIF_TERM _caller_ref,
+                    DbObject *_db_handle)
+                : WorkTask(_caller_env, _caller_ref, _db_handle)
+    {
+
+    };
+
+    virtual ~FlushTask() {};
+
+    virtual work_result operator()()
+    {
+        rocksdb::FlushOptions opts;
+        opts.wait = true;
+        rocksdb::Status status = m_DbPtr->m_Db->Flush(opts);
+
+        if (!status.ok()) {
+            return work_result(local_env(), ATOM_ERROR, status);
+        }
+
+        return work_result(ATOM_OK);
+    }   // operator()
+
+};  // class FlushTask
+
 /**
  * Background object for async write
  */

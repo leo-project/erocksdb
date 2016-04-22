@@ -32,6 +32,7 @@
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
 -export([checkpoint/2]).
+-export([flush/1]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 
 -export_type([db_handle/0,
@@ -507,6 +508,16 @@ checkpoint(DbHandle, Path) ->
     CallerRef = make_ref(),
     async_checkpoint(CallerRef, DbHandle, Path),
     ?WAIT_FOR_REPLY(CallerRef).
+
+%% @doc Flush all mem-table data.
+-spec flush(db_handle()) -> ok | {error, any()}.
+flush(DbHandle) ->
+    CallerRef = make_ref(),
+    async_flush(CallerRef, DbHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_flush(_CallerRef, _DbHandle) ->
+    erlang:nif_error({error, not_loaded}).
 
 
 %% @doc

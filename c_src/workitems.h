@@ -276,6 +276,44 @@ public:
 };  // class FlushTask
 
 /**
+ * Background object for to get_aproximate_sizes
+ */
+
+class GetApproximateSizesTask : public WorkTask
+{
+protected:
+    std::string skey;
+    std::string ekey;
+    bool include_memtable;
+
+public:
+    GetApproximateSizesTask(ErlNifEnv *_caller_env,
+        ERL_NIF_TERM _caller_ref, DbObject *_db_handle,
+        std::string& skey_, std::string &ekey_, bool& include_memtable_)
+      : WorkTask(_caller_env, _caller_ref, _db_handle),
+      skey(skey_), ekey(ekey_), include_memtable(include_memtable_)
+    {
+
+    };
+
+    virtual ~GetApproximateSizesTask() {};
+
+    virtual work_result operator()()
+    {
+        rocksdb::Slice s(skey);
+        rocksdb::Slice e(ekey);
+        rocksdb::Range r(s, e);
+
+        uint64_t sz;
+        m_DbPtr->m_Db->GetApproximateSizes(&r, 1, &sz, include_memtable);
+
+        ERL_NIF_TERM result = enif_make_uint64(local_env(), sz);
+        return work_result(result);
+    }   // operator()
+
+};  // class GetApproximateSizesTask
+
+/**
  * Background object for async write
  */
 

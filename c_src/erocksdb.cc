@@ -68,6 +68,7 @@ static ErlNifFunc nif_funcs[] =
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
     {"async_flush", 2, erocksdb_flush},
+    {"async_get_approximate_sizes", 5, erocksdb_approximate_sizes},
 
     {"async_open", 4, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
@@ -1438,6 +1439,56 @@ erocksdb_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
     return erocksdb::ATOM_OK;
 } // erocksdb_flush
+
+ERL_NIF_TERM
+erocksdb_approximate_sizes(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    erocksdb::ReferencePtr<erocksdb::DbObject> db_ptr;
+    db_ptr.assign(erocksdb::DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+        return enif_make_badarg(env);
+
+    if(db_ptr->m_Db == NULL)
+        return error_einval(env);
+
+
+    ErlNifBinary start;
+    ErlNifBinary end;
+    std::string start_key;
+    std::string end_key;
+    bool include_memtable;
+
+    // initialize the range
+    if (!enif_inspect_binary(env, argv[2], &start)) return enif_make_badarg(env);
+    start_key.assign((const char *)start.data, start.size);
+    if (!enif_inspect_binary(env, argv[3], &end)) return enif_make_badarg(env);
+    end_key.assign((const char *)end.data, end.size);
+
+
+    if (argv[4] == erocksdb::ATOM_TRUE) {
+        include_memtable = true;
+    } else {
+        include_memtable = false;
+    }
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::GetApproximateSizesTask(env,
+            caller_ref, db_ptr.get(), start_key, end_key, include_memtable);
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return erocksdb::send_reply(env, caller_ref,
+                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+} // erocksdb_approximate_size
 
 ERL_NIF_TERM
 erocksdb_iterator_close(

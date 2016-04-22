@@ -241,7 +241,6 @@ get(
 
     rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
 
-
     /// retrieve vars
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
     if(NULL==db_ptr.get())

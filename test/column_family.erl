@@ -6,7 +6,7 @@
 
 
 basic_test() ->
-    os:cmd("rm -rf test.db"),
+    erocksdb:destroy("test.db", []),
     ColumnFamilies = [{"default", []}],
     {ok, Db, Handles1} = erocksdb:open_with_cf("test.db", [{create_if_missing, true}], ColumnFamilies),
     ?assertEqual(1, length(Handles1)),

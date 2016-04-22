@@ -31,9 +31,9 @@
 #include "rocksdb/slice_transform.h"
 
 ERL_NIF_TERM error_einval(ErlNifEnv* env);
-ERL_NIF_TERM error_tuple(ErlNifEnv* env, ERL_NIF_TERM error,
-rocksdb::Status& status);
-
+ERL_NIF_TERM error_tuple(ErlNifEnv* env, ERL_NIF_TERM error, rocksdb::Status& status);
 ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, rocksdb::Slice s);
+
+int binary_to_slice(ErlNifEnv* env, ERL_NIF_TERM val, rocksdb::Slice *slice);
 
 #endif

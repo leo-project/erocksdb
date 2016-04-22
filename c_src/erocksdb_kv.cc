@@ -289,16 +289,15 @@ get(
 
 
     // convert key to string
-    ErlNifBinary key;
-    std::string m_Key;
-    enif_inspect_binary(env, key_ref, &key);
-    m_Key.assign((const char *)key.data, key.size);
+    rocksdb::Slice key_slice;
+
+    if (!binary_to_slice(env, key_ref, &key_slice))
+        return enif_make_badarg(env);
+
 
     // get value
     ERL_NIF_TERM value_bin;
     std::string value;
-    rocksdb::Slice key_slice(m_Key);
-
     rocksdb::Status status;
     if(argc==3)
     {
@@ -320,5 +319,6 @@ get(
 
     return enif_make_tuple2(env, ATOM_OK, value_bin);
 }   // get
+
 
 }

@@ -23,6 +23,7 @@
     #include "util.h"
 #endif
 
+#include "rocksdb/db.h"
 
 // Erlang helpers:
 ERL_NIF_TERM error_einval(ErlNifEnv* env)
@@ -45,4 +46,13 @@ ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, rocksdb::Slice s)
     unsigned char* value = enif_make_new_binary(env, s.size(), &result);
     memcpy(value, s.data(), s.size());
     return result;
+}
+
+int binary_to_slice(ErlNifEnv* env, ERL_NIF_TERM val, rocksdb::Slice* slice)
+{
+    ErlNifBinary bin;
+    if(!enif_inspect_binary(env, val, &bin))
+        return 0;
+    *slice = rocksdb::Slice((const char *)bin.data, bin.size);
+    return 1;
 }

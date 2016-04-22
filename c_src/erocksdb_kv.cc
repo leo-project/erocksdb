@@ -176,7 +176,7 @@ ERL_NIF_TERM write_batch_item(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::WriteB
 namespace erocksdb {
 
 ERL_NIF_TERM
-write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+Write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     const ERL_NIF_TERM& handle_ref = argv[0];
     const ERL_NIF_TERM& action_ref = argv[1];
@@ -226,7 +226,7 @@ write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 
 ERL_NIF_TERM
-get(
+Get(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
@@ -319,6 +319,100 @@ get(
 
     return enif_make_tuple2(env, ATOM_OK, value_bin);
 }   // get
+
+
+ERL_NIF_TERM
+Put(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+    ReferencePtr<DbObject> db_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
+    int i = 1;
+    if(argc == 5)
+        i = 2;
+
+    rocksdb::Slice key;
+    rocksdb::Slice value;
+    if(!binary_to_slice(env, argv[i], &key) ||
+            !binary_to_slice(env, argv[i+1], &value))
+    {
+        return enif_make_badarg(env);
+    }
+
+    rocksdb::WriteOptions* opts = new rocksdb::WriteOptions;
+    fold(env, argv[i+2], parse_write_option, *opts);
+
+    rocksdb::Status status;
+    if(argc==5)
+    {
+        ReferencePtr<ColumnFamilyObject> cf_ptr;
+        if(!enif_get_cf(env, argv[1], &cf_ptr))
+            return enif_make_badarg(env);
+
+        status = db_ptr->m_Db->Put(*opts, cf_ptr->m_ColumnFamily, key, value);
+    }
+    else
+    {
+        status = db_ptr->m_Db->Put(*opts, key, value);
+    }
+
+    if(status.ok())
+    {
+        return ATOM_OK;
+    }
+
+    return error_tuple(env, ATOM_ERROR, status);
+}
+
+ERL_NIF_TERM
+Delete(
+    ErlNifEnv* env,
+    int argc,
+    const ERL_NIF_TERM argv[])
+{
+    ReferencePtr<DbObject> db_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
+    int i = 1;
+    if(argc == 4)
+        i = 2;
+
+    rocksdb::Slice key;
+    if(!binary_to_slice(env, argv[i], &key))
+    {
+        return enif_make_badarg(env);
+    }
+
+    rocksdb::WriteOptions* opts = new rocksdb::WriteOptions;
+    fold(env, argv[i+1], parse_write_option, *opts);
+
+    rocksdb::Status status;
+    if(argc==4)
+    {
+        ReferencePtr<ColumnFamilyObject> cf_ptr;
+        if(!enif_get_cf(env, argv[1], &cf_ptr))
+            return enif_make_badarg(env);
+
+        status = db_ptr->m_Db->Delete(*opts, cf_ptr->m_ColumnFamily, key);
+    }
+    else
+    {
+        status = db_ptr->m_Db->Delete(*opts, key);
+    }
+
+    if(status.ok())
+    {
+        return ATOM_OK;
+    }
+
+    return error_tuple(env, ATOM_ERROR, status);
+}
+
 
 
 }

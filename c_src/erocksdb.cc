@@ -74,8 +74,7 @@ static ErlNifFunc nif_funcs[] =
     {"is_empty", 1, erocksdb_is_empty},
     {"checkpoint", 2, erocksdb::checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"flush", 1, erocksdb_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"get_approximate_size", 4, erocksdb_approximate_size,
-    ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get_approximate_size", 4, erocksdb_approximate_size, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // column families
     {"list_column_families", 2, erocksdb::list_column_families, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -87,9 +86,13 @@ static ErlNifFunc nif_funcs[] =
     {"release_snapshot", 1, erocksdb::release_snapshot, ERL_NIF_DIRTY_JOB_CPU_BOUND},
 
     // K/V operations
-    {"write", 3, erocksdb::write, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"get", 3, erocksdb::get, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"get", 4, erocksdb::get, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"write", 3, erocksdb::Write, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get", 3, erocksdb::Get, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get", 4, erocksdb::Get, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"put", 4, erocksdb::Put, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"put", 5, erocksdb::Put, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"delete", 3, erocksdb::Delete, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"delete", 4, erocksdb::Delete, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // Iterators operations
     {"iterator", 2, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},

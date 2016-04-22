@@ -178,26 +178,13 @@ namespace erocksdb {
 ERL_NIF_TERM
 Write(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& handle_ref = argv[0];
-    const ERL_NIF_TERM& action_ref = argv[1];
-    const ERL_NIF_TERM& opts_ref   = argv[2];
-
     ReferencePtr<DbObject> db_ptr;
-
-    db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
-
-    if(NULL==db_ptr.get()
-       || !enif_is_list(env, action_ref)
-       || !enif_is_list(env, opts_ref))
-    {
+    if(!enif_get_db(env, argv[0], &db_ptr))
         return enif_make_badarg(env);
-    }
 
-    // is this even possible?
-    if(NULL == db_ptr->m_Db)
-    {
-        return error_einval(env);
-    }
+    if(!enif_is_list(env, argv[1]) || !enif_is_list(env, argv[2]))
+        return enif_make_badarg(env);
+
 
     // Construct a write batch:
     rocksdb::WriteBatch* batch = new rocksdb::WriteBatch;
@@ -367,7 +354,5 @@ Delete(
 
     return error_tuple(env, ATOM_ERROR, status);
 }
-
-
-
 }
+

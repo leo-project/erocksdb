@@ -9,8 +9,7 @@ destroy_reopen(DbName, Options) ->
 
 
 flush_test() ->
-	os:cmd("rm -rf test.db"),
-	{ok, Db} = erocksdb:open("test.db", [{create_if_missing, true}], []),
+	Db = destroy_reopen("test.db", [{create_if_missing, true}]),
 	ok = erocksdb:put(Db, <<"a">>, <<"1">>, []),
 	ok = erocksdb:flush(Db),
 	{ok, <<"1">>} = erocksdb:get(Db, <<"a">>, []),

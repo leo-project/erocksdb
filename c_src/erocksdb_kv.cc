@@ -231,82 +231,36 @@ Get(
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& dbh_ref    = argv[0];
-    ERL_NIF_TERM cf_ref;
-    ERL_NIF_TERM key_ref;
-    ERL_NIF_TERM opts_ref;
-
     ReferencePtr<DbObject> db_ptr;
-    ReferencePtr<ColumnFamilyObject> cf_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
+    int i = 1;
+    if(argc == 4)
+        i = 2;
+
+    rocksdb::Slice key;
+    if(!binary_to_slice(env, argv[i], &key))
+    {
+        return enif_make_badarg(env);
+    }
 
     rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
+    fold(env, argv[i+1], parse_read_option, *opts);
 
-    /// retrieve vars
-    db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
-    if(NULL==db_ptr.get())
-        return enif_make_badarg(env);
-
-
-    if(argc  == 3)
-    {
-        key_ref = argv[1];
-        opts_ref = argv[2];
-    }
-    else
-    {
-        cf_ref = argv[1];
-        key_ref = argv[2];
-        opts_ref = argv[3];
-        // we use a column family assign the value
-        cf_ptr.assign(ColumnFamilyObject::RetrieveColumnFamilyObject(env, cf_ref));
-    }
-
-
-    if(NULL==db_ptr.get()
-       || !enif_is_list(env, opts_ref)
-       || !enif_is_binary(env, key_ref))
-    {
-        return enif_make_badarg(env);
-    }
-
-    if(NULL == db_ptr->m_Db)
-    {
-        return error_einval(env);
-    }
-
-    if(argc > 3) {
-        if(NULL==cf_ptr.get())
-            return enif_make_badarg(env);
-    }
-
-
-    ERL_NIF_TERM fold_result;
-    fold_result = fold(env, opts_ref, parse_read_option, *opts);
-    if(fold_result!=ATOM_OK)
-    {
-        return enif_make_badarg(env);
-    }
-
-
-    // convert key to string
-    rocksdb::Slice key_slice;
-
-    if (!binary_to_slice(env, key_ref, &key_slice))
-        return enif_make_badarg(env);
-
-
-    // get value
-    ERL_NIF_TERM value_bin;
-    std::string value;
     rocksdb::Status status;
-    if(argc==3)
+    std::string value;
+    if(argc==4)
     {
-        status = db_ptr->m_Db->Get(*opts, key_slice, &value);
+        ReferencePtr<ColumnFamilyObject> cf_ptr;
+        if(!enif_get_cf(env, argv[1], &cf_ptr))
+            return enif_make_badarg(env);
+
+        status = db_ptr->m_Db->Get(*opts, cf_ptr->m_ColumnFamily, key, &value);
     }
     else
     {
-        ColumnFamilyObject* cf = cf_ptr.get();
-        status = db_ptr->m_Db->Get(*opts, cf->m_ColumnFamily, key_slice, &value);
+        status = db_ptr->m_Db->Get(*opts, key, &value);
     }
 
     if (!status.ok())
@@ -314,6 +268,7 @@ Get(
         return ATOM_NOT_FOUND;
     }
 
+    ERL_NIF_TERM value_bin;
     unsigned char* v = enif_make_new_binary(env, value.size(), &value_bin);
     memcpy(v, value.c_str(), value.size());
 

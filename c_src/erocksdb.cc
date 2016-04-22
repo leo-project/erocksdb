@@ -73,6 +73,7 @@ static ErlNifFunc nif_funcs[] =
     {"repair", 2, erocksdb_repair, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"is_empty", 1, erocksdb_is_empty},
     {"checkpoint", 2, erocksdb::checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"flush", 1, erocksdb_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // column families
     {"list_column_families", 2, erocksdb::list_column_families, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -1118,6 +1119,38 @@ erocksdb_close(
     return(ret_term);
 
 }  // erocksdb_close
+
+ERL_NIF_TERM
+erocksdb_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+
+    erocksdb::DbObject * db_ptr;
+    ERL_NIF_TERM ret_term;
+
+    ret_term=erocksdb::ATOM_OK;
+    db_ptr=erocksdb::DbObject::RetrieveDbObject(env, argv[0]);
+
+    if (NULL==db_ptr)
+    {
+        return enif_make_badarg(env);
+    }
+
+    if (db_ptr->m_Db == NULL)
+    {
+        return error_einval(env);
+    }
+
+    rocksdb::FlushOptions opts;
+    opts.wait = true;
+    rocksdb::Status status = db_ptr->m_Db->Flush(opts);
+
+    if (!status.ok())
+    {
+        return error_tuple(env, erocksdb::ATOM_ERROR_DB_REPAIR, status);
+    }
+
+    return erocksdb::ATOM_OK;
+}
 
 
 ERL_NIF_TERM

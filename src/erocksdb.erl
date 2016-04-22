@@ -32,6 +32,7 @@
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
 -export([checkpoint/2]).
+-export([flush/1]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 
 -export_type([db_handle/0,
@@ -246,6 +247,11 @@ drop_column_family(_CFHandle) ->
     | {error, any()}.
 checkpoint(_DbHandle, _Path) ->
     erlang:nif_error({error, not_loaded}).
+
+%% @doc force memtable in memory to be stored on disk.
+-spec flush(DbHandle::db_handle()) -> ok.
+flush(_DbHandle) ->
+  erlang:nif_error({error, not_loaded}).
 
 %% @sdoc return a database snapshot
 %% Snapshots provide consistent read-only views over the entire state of the key-value store

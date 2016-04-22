@@ -74,6 +74,8 @@ static ErlNifFunc nif_funcs[] =
     {"is_empty", 1, erocksdb_is_empty},
     {"checkpoint", 2, erocksdb::checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"flush", 1, erocksdb_flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get_approximate_size", 4, erocksdb_approximate_size,
+    ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // column families
     {"list_column_families", 2, erocksdb::list_column_families, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -94,7 +96,7 @@ static ErlNifFunc nif_funcs[] =
     {"iterator", 3, erocksdb::iterator, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"iterators", 3, erocksdb::iterators, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"iterators", 4, erocksdb::iterators, ERL_NIF_DIRTY_JOB_IO_BOUND},
-    {"iterator_close", 1, erocksdb::iterator_close},
+    {"iterator_close", 1, erocksdb::iterator_close, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"iterator_move", 2, erocksdb::iterator_move, ERL_NIF_DIRTY_JOB_IO_BOUND}
 
 };
@@ -1152,6 +1154,52 @@ erocksdb_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return erocksdb::ATOM_OK;
 }
 
+
+ERL_NIF_TERM
+erocksdb_approximate_size(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    erocksdb::ReferencePtr<erocksdb::DbObject> db_ptr;
+    ErlNifBinary start;
+    ErlNifBinary end;
+    std::string start_key;
+    std::string end_key;
+    bool include_memtable;
+
+    db_ptr.assign(erocksdb::DbObject::RetrieveDbObject(env, argv[0]));
+
+    if (NULL==db_ptr.get() || !enif_is_binary(env, argv[1])
+        || !enif_is_binary(env, argv[2]))
+    {
+        return enif_make_badarg(env);
+    }
+
+    if (db_ptr->m_Db == NULL)
+    {
+        return error_einval(env);
+    }
+
+    enif_inspect_binary(env, argv[1], &start);
+    start_key.assign((const char *)start.data, start.size);
+    enif_inspect_binary(env, argv[2], &end);
+    end_key.assign((const char *)end.data, end.size);
+
+    if (argv[3] == erocksdb::ATOM_TRUE) {
+        include_memtable = true;
+    }
+    else
+    {
+        include_memtable = false;
+    }
+
+    rocksdb::Slice s(start_key);
+    rocksdb::Slice e(end_key);
+
+    uint64_t result;
+    const rocksdb::Range r(s, e);
+    db_ptr->m_Db->GetApproximateSizes(&r, 1, &result, include_memtable);
+
+    return enif_make_uint64(env, result);
+}
 
 ERL_NIF_TERM
 erocksdb_status(

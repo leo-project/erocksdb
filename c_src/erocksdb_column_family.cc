@@ -40,7 +40,7 @@ namespace erocksdb {
 
 
 ERL_NIF_TERM
-list_column_families(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+ListColumnFamilies(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     char db_name[4096];
 
@@ -78,16 +78,11 @@ list_column_families(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 } // list_column_families
 
 ERL_NIF_TERM
-create_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+CreateColumnFamily(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ReferencePtr<DbObject> db_ptr;
-    const ERL_NIF_TERM& handle_ref = argv[0];
-    db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
-
-    if(NULL==db_ptr.get())
-    {
+    if(!enif_get_db(env, argv[0], &db_ptr))
         return enif_make_badarg(env);
-    }
 
     char cf_name[4096];
     rocksdb::ColumnFamilyOptions *opts = new rocksdb::ColumnFamilyOptions;
@@ -119,18 +114,13 @@ create_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }   // create_column_family
 
 ERL_NIF_TERM
-drop_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+DropColumnFamily(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ReferencePtr<ColumnFamilyObject> cf_ptr;
-    const ERL_NIF_TERM& cf_ref = argv[0];
-    cf_ptr.assign(ColumnFamilyObject::RetrieveColumnFamilyObject(env, cf_ref));
-
-    if(NULL==cf_ptr.get())
-    {
+    if(!enif_get_cf(env, argv[0], &cf_ptr))
         return enif_make_badarg(env);
-    }
 
-     // release snapshot object
+    // release snapshot object
     ColumnFamilyObject* cf = cf_ptr.get();
     rocksdb::Status status = cf->m_DbPtr->m_Db->DropColumnFamily(cf->m_ColumnFamily);
     if(status.ok())
@@ -138,9 +128,7 @@ drop_column_family(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         // set closing flag
         ErlRefObject::InitiateCloseRequest(cf);
         return ATOM_OK;
-
     }
-
     return error_tuple(env, ATOM_ERROR, status);
 }   // drop_column_family
 

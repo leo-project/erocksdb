@@ -48,32 +48,24 @@
 namespace erocksdb {
 
 ERL_NIF_TERM
-iterator(
+Iterator(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-    const ERL_NIF_TERM& dbh_ref     = argv[0];
-    const ERL_NIF_TERM& options_ref = argv[1];
     const bool keys_only = ((argc == 3) && (argv[2] == ATOM_KEYS_ONLY));
 
     rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
 
     ReferencePtr<DbObject> db_ptr;
-    db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
-
-    if(NULL==db_ptr.get()
-       || !enif_is_list(env, options_ref))
-     {
+    if(!enif_get_db(env, argv[0], &db_ptr))
         return enif_make_badarg(env);
-     }
 
-    // likely useless
-    if(NULL == db_ptr->m_Db)
-        return error_einval(env);
+    if(!enif_is_list(env, argv[1]))
+        return enif_make_badarg(env);
 
     ERL_NIF_TERM fold_result;
-    fold_result = fold(env, options_ref, parse_read_option, *opts);
+    fold_result = fold(env, argv[1], parse_read_option, *opts);
     if(fold_result!=erocksdb::ATOM_OK)
         return enif_make_badarg(env);
 
@@ -95,39 +87,27 @@ iterator(
 
 
 ERL_NIF_TERM
-iterators(
+Iterators(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
-
-    const ERL_NIF_TERM& dbh_ref     = argv[0];
-    const ERL_NIF_TERM& cfs_ref = argv[1];
-    const ERL_NIF_TERM& options_ref = argv[2];
     const bool keys_only = ((argc == 4) && (argv[3] == ATOM_KEYS_ONLY));
 
-    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
-
     ReferencePtr<DbObject> db_ptr;
-    db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
 
-
-    if(NULL==db_ptr.get() ||
-       !enif_is_list(env, options_ref) ||
-       !enif_is_list(env, cfs_ref))
-    {
+    if(!enif_is_list(env, argv[1]) || !enif_is_list(env, argv[2]))
        return enif_make_badarg(env);
-    }
 
-    if(NULL == db_ptr->m_Db)
-        return error_einval(env);
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
+    fold(env, argv[2], parse_read_option, *opts);
 
-    // parse options
-    fold(env, options_ref, parse_read_option, *opts);
     std::vector<rocksdb::ColumnFamilyHandle*> column_families;
     std::vector<ColumnFamilyObject*> cf_objects;
 
-    ERL_NIF_TERM head, tail = cfs_ref;
+    ERL_NIF_TERM head, tail = argv[1];
     while(enif_get_list_cell(env, tail, &head, &tail))
     {
         ReferencePtr<ColumnFamilyObject> cf_ptr;
@@ -161,7 +141,7 @@ iterators(
 }
 
 ERL_NIF_TERM
-iterator_close(
+IteratorClose(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
@@ -192,7 +172,7 @@ iterator_close(
 }   // iterator_close
 
 ERL_NIF_TERM
-iterator_move(
+IteratorMove(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
@@ -216,20 +196,14 @@ iterator_move(
         if(ATOM_FIRST == action_or_target) itr->SeekToFirst();
         if(ATOM_LAST == action_or_target) itr->SeekToLast();
         if(ATOM_NEXT == action_or_target) itr->Next();
-        if(ATOM_PREV == action_or_target) { itr->Prev(); }
+        if(ATOM_PREV == action_or_target) itr->Prev();
     }
     else
     {
-        ErlNifBinary key;
-        if(!enif_inspect_binary(env, action_or_target, &key))
-        {
+        rocksdb::Slice key;
+        if(!binary_to_slice(env, action_or_target, &key))
             return error_einval(env);
-        }
-
-        std::string m_Key;
-        m_Key.assign((const char *)key.data, key.size);
-        rocksdb::Slice key_slice(m_Key);
-        itr->Seek(key_slice);
+        itr->Seek(key);
     }
 
     if(!itr->Valid())

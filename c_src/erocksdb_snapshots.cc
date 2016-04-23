@@ -41,29 +41,17 @@
 namespace erocksdb {
 
 ERL_NIF_TERM
-snapshot(
+GetSnapshot(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])
 {
     ReferencePtr<DbObject> db_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
     SnapshotObject* snapshot_ptr;
     const rocksdb::Snapshot* snapshot;
-    const ERL_NIF_TERM& handle_ref = argv[0];
-
-
-    db_ptr.assign(DbObject::RetrieveDbObject(env, handle_ref));
-
-    if(NULL==db_ptr.get())
-    {
-        return enif_make_badarg(env);
-    }
-
-    // is this even possible?
-    if(NULL == db_ptr->m_Db)
-    {
-        return error_einval(env);
-    }
 
     // create snapshot
     snapshot = db_ptr->m_Db->GetSnapshot();
@@ -80,7 +68,7 @@ snapshot(
 
 
 ERL_NIF_TERM
-release_snapshot(
+ReleaseSnapshot(
     ErlNifEnv* env,
     int argc,
     const ERL_NIF_TERM argv[])

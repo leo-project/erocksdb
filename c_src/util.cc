@@ -23,6 +23,7 @@
     #include "util.h"
 #endif
 
+#include "rocksdb/db.h"
 
 // Erlang helpers:
 ERL_NIF_TERM error_einval(ErlNifEnv* env)
@@ -46,3 +47,38 @@ ERL_NIF_TERM slice_to_binary(ErlNifEnv* env, rocksdb::Slice s)
     memcpy(value, s.data(), s.size());
     return result;
 }
+
+int binary_to_slice(ErlNifEnv* env, ERL_NIF_TERM val, rocksdb::Slice* slice)
+{
+    ErlNifBinary bin;
+    if(!enif_inspect_binary(env, val, &bin))
+        return 0;
+    *slice = rocksdb::Slice((const char *)bin.data, bin.size);
+    return 1;
+}
+
+int
+enif_get_db(ErlNifEnv* env, ERL_NIF_TERM dbval, erocksdb::ReferencePtr<erocksdb::DbObject>* db_ptr)
+{
+    db_ptr->assign(erocksdb::DbObject::RetrieveDbObject(env, dbval));
+
+    if(NULL==db_ptr->get())
+        return 0;
+
+    if(NULL==db_ptr->get()->m_Db)
+        return 0;
+
+    return 1;
+}
+
+int
+enif_get_cf(ErlNifEnv* env, ERL_NIF_TERM cfval, erocksdb::ReferencePtr<erocksdb::ColumnFamilyObject>* cf_ptr)
+{
+    cf_ptr->assign(erocksdb::ColumnFamilyObject::RetrieveColumnFamilyObject(env, cfval));
+
+    if(NULL==cf_ptr->get())
+        return 0;
+
+    return 1;
+}
+

@@ -275,8 +275,8 @@ release_snapshot(_SnapshotHandle) ->
                                       Key::binary(),
                                       Value::binary(),
                                       WriteOpts::write_options()).
-put(DBHandle, Key, Value, WriteOpts) ->
-    write(DBHandle, [{put, Key, Value}], WriteOpts).
+put(_DBHandle, _Key, _Value, _WriteOpts) ->
+  erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Put a key/value pair into the specified column family
@@ -286,8 +286,9 @@ put(DBHandle, Key, Value, WriteOpts) ->
                                       Key::binary(),
                                       Value::binary(),
                                       WriteOpts::write_options()).
-put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
-    write(DBHandle, [{put, CFHandle, Key, Value}], WriteOpts).
+put(_DBHandle, _CFHandle, _Key, _Value, _WriteOpts) ->
+  erlang:nif_error({error, not_loaded}).
+
 
 %% @doc
 %% Delete a key/value pair in the default column family
@@ -295,8 +296,8 @@ put(DBHandle, CFHandle, Key, Value, WriteOpts) ->
              ok | {error, any()} when DBHandle::db_handle(),
                                       Key::binary(),
                                       WriteOpts::write_options()).
-delete(DBHandle, Key, WriteOpts) ->
-    write(DBHandle, [{delete, Key}], WriteOpts).
+delete(_DBHandle, _Key, _WriteOpts) ->
+  erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Delete a key/value pair in the specified column family
@@ -305,8 +306,8 @@ delete(DBHandle, Key, WriteOpts) ->
                                       CFHandle::cf_handle(),
                                       Key::binary(),
                                       WriteOpts::write_options()).
-delete(DBHandle, CFHandle, Key, WriteOpts) ->
-    write(DBHandle, [{delete, CFHandle, Key}], WriteOpts).
+delete(_DBHandle, _CFHandle, _Key, _WriteOpts) ->
+  erlang:nif_error({error, not_loaded}).
 
 %% @doc
 %% Apply the specified updates to the database.

@@ -1,6 +1,6 @@
 // -------------------------------------------------------------------
 //
-// eleveldb: Erlang Wrapper for LevelDB (http://code.google.com/p/leveldb/)
+// erocksdb: Erlang Wrapper for Rocksdb (http://code.google.com/p/leveldb/)
 //
 // Copyright (c) 2011-2013 Basho Technologies, Inc. All Rights Reserved.
 //
@@ -75,6 +75,7 @@ static ErlNifFunc nif_funcs[] =
     {"checkpoint", 2, erocksdb::Checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"flush", 1, erocksdb::Flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"get_approximate_size", 4, erocksdb::GetApproximateSize, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get_latest_sequence_number", 1, erocksdb::GetLatestSequenceNumber},
 
     // column families
     {"list_column_families", 2, erocksdb::ListColumnFamilies, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -1123,7 +1124,6 @@ Flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return erocksdb::ATOM_OK;
 }
 
-
 ERL_NIF_TERM
 GetApproximateSize(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -1158,6 +1158,20 @@ GetApproximateSize(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ERL_NIF_TERM
+GetLatestSequenceNumber(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+
+    ReferencePtr<DbObject> db_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
+    rocksdb::SequenceNumber seq = db_ptr->m_Db->GetLatestSequenceNumber();
+
+    return enif_make_uint64(env, seq);
+}
+
+
+    ERL_NIF_TERM
 Status(
     ErlNifEnv* env,
     int argc,

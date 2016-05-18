@@ -35,6 +35,7 @@
 -export([flush/1]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 -export([get_approximate_size/4]).
+-export([get_latest_sequence_number/1]).
 
 -export_type([db_handle/0,
               cf_handle/0,
@@ -467,6 +468,10 @@ repair(_Name, _DBOpts) ->
 -spec get_approximate_size(db_handle(), binary(), binary(), boolean()) -> integer().
 get_approximate_size(_DbHandle, _SKey, _EKey, _IncludeMemtable) ->
   erlang:nif_error({error, not_loaded}).
+
+get_latest_sequence_number(_DbHandle) ->
+  erlang:nif_error({error, not_loaded}).
+
 
 
 %% @doc

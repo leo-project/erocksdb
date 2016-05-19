@@ -124,6 +124,7 @@ extern ERL_NIF_TERM ATOM_CLEAR;
 extern ERL_NIF_TERM ATOM_PUT;
 extern ERL_NIF_TERM ATOM_DELETE;
 
+
 // Related to Iterator Actions
 extern ERL_NIF_TERM ATOM_FIRST;
 extern ERL_NIF_TERM ATOM_LAST;

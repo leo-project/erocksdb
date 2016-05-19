@@ -28,6 +28,7 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb/write_batch.h"
+#include "rocksdb/transaction_log.h"
 
 #ifndef INCL_MUTEX_H
     #include "mutex.h"
@@ -182,9 +183,11 @@ public:
     Mutex m_ItrMutex;                         //!< mutex protecting m_ItrList
     Mutex m_SnapshotMutex;                    //!< mutex protecting m_SnapshotList
     Mutex m_ColumnFamilyMutex;                //!< mutex ptotecting m_ColumnFamily
+    Mutex m_TLogItrMutex;              //!< mutex ptotecting m_TransactionLogList
     std::list<class ItrObject *> m_ItrList;   //!< ItrObjects holding ref count to this
     std::list<class SnapshotObject *> m_SnapshotList;
     std::list<class ColumnFamilyObject *> m_ColumnFamilyList;
+    std::list<class TLogItrObject *> m_TLogItrList;
 
 protected:
     static ErlNifResourceType* m_Db_RESOURCE;
@@ -211,6 +214,11 @@ public:
     void AddSnapshotReference(class SnapshotObject *);
 
     void RemoveSnapshotReference(class SnapshotObject *);
+
+    // manual back link to ItrObjects holding reference to this
+    void AddTLogReference(class TLogItrObject *);
+
+    void RemoveTLogReference(class TLogItrObject *);
 
     static void CreateDbObjectType(ErlNifEnv * Env);
 
@@ -344,6 +352,43 @@ private:
     ItrObject(const ItrObject &);            // no copy
     ItrObject & operator=(const ItrObject &); // no assignment
 };  // class ItrObject
+
+
+
+
+/**
+ * Per Iterator object.  Created as erlang reference.
+ */
+class TLogItrObject : public ErlRefObject
+{
+public:
+    rocksdb::TransactionLogIterator * m_Iter;
+    ReferencePtr<DbObject> m_DbPtr;
+
+protected:
+    static ErlNifResourceType* m_TLogItr_RESOURCE;
+
+public:
+    TLogItrObject(DbObject *, rocksdb::TransactionLogIterator * Itr);
+
+    virtual ~TLogItrObject(); // needs to perform free_itr
+
+    virtual void Shutdown();
+
+    static void CreateTLogItrObjectType(ErlNifEnv * Env);
+
+    static TLogItrObject * CreateTLogItrObject(DbObject * Db, rocksdb::TransactionLogIterator * Itr);
+
+    static TLogItrObject * RetrieveTLogItrObject(ErlNifEnv * Env, const ERL_NIF_TERM & DbTerme);
+
+    static void TLogItrObjectResourceCleanup(ErlNifEnv *Env, void * Arg);
+
+private:
+    TLogItrObject();
+    TLogItrObject(const TLogItrObject &);            // no copy
+    TLogItrObject & operator=(const TLogItrObject &); // no assignment
+};  // class TLogItrObject
+
 
 } // namespace erocksdb
 

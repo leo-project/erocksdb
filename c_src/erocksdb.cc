@@ -1,6 +1,6 @@
 // -------------------------------------------------------------------
 //
-// eleveldb: Erlang Wrapper for LevelDB (http://code.google.com/p/leveldb/)
+// erocksdb: Erlang Wrapper for Rocksdb (http://code.google.com/p/leveldb/)
 //
 // Copyright (c) 2011-2013 Basho Technologies, Inc. All Rights Reserved.
 //
@@ -75,6 +75,13 @@ static ErlNifFunc nif_funcs[] =
     {"checkpoint", 2, erocksdb::Checkpoint, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"flush", 1, erocksdb::Flush, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"get_approximate_size", 4, erocksdb::GetApproximateSize, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"get_latest_sequence_number", 1, erocksdb::GetLatestSequenceNumber},
+
+    // transactions
+    {"get_updates_since", 2, erocksdb::GetUpdatesSince, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"next_update", 1, erocksdb::TransactionLogIteratorNext, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"close_updates_iterator", 1, erocksdb::TransactionLogIteratorClose, ERL_NIF_DIRTY_JOB_IO_BOUND},
+    {"write_update", 3, erocksdb::WriteUpdate, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     // column families
     {"list_column_families", 2, erocksdb::ListColumnFamilies, ERL_NIF_DIRTY_JOB_IO_BOUND},
@@ -1123,7 +1130,6 @@ Flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     return erocksdb::ATOM_OK;
 }
 
-
 ERL_NIF_TERM
 GetApproximateSize(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
@@ -1158,6 +1164,20 @@ GetApproximateSize(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 }
 
 ERL_NIF_TERM
+GetLatestSequenceNumber(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+
+    ReferencePtr<DbObject> db_ptr;
+    if(!enif_get_db(env, argv[0], &db_ptr))
+        return enif_make_badarg(env);
+
+    rocksdb::SequenceNumber seq = db_ptr->m_Db->GetLatestSequenceNumber();
+
+    return enif_make_uint64(env, seq);
+}
+
+
+    ERL_NIF_TERM
 Status(
     ErlNifEnv* env,
     int argc,
@@ -1285,8 +1305,8 @@ try
     erocksdb::DbObject::CreateDbObjectType(env);
     erocksdb::ItrObject::CreateItrObjectType(env);
     erocksdb::SnapshotObject::CreateSnapshotObjectType(env);
-
     erocksdb::ColumnFamilyObject::CreateColumnFamilyObjectType(env);
+    erocksdb::TLogItrObject::CreateTLogItrObjectType(env);
 
 // must initialize atoms before processing options
 #define ATOM(Id, Value) { Id = enif_make_atom(env, Value); }

@@ -128,6 +128,7 @@ ERL_NIF_TERM ATOM_INPLACE_UPDATE_SUPPORT;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_NUM_LOCKS;
 ERL_NIF_TERM ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE;
 ERL_NIF_TERM ATOM_IN_MEMORY_MODE;
+ERL_NIF_TERM ATOM_BLOCK_BASED_TABLE_OPTIONS;
 
 // Related to DBOptions
 ERL_NIF_TERM ATOM_TOTAL_THREADS;
@@ -166,6 +167,15 @@ ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
 ERL_NIF_TERM ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN;
 ERL_NIF_TERM ATOM_WAL_RECOVERY_MODE;
+
+// Related to BlockBasedTable Options
+ERL_NIF_TERM ATOM_NO_BLOCK_CACHE;
+ERL_NIF_TERM ATOM_BLOCK_SIZE;
+ERL_NIF_TERM ATOM_BLOCK_CACHE_SIZE;
+ERL_NIF_TERM ATOM_BLOOM_FILTER_POLICY;
+ERL_NIF_TERM ATOM_FORMAT_VERSION;
+ERL_NIF_TERM ATOM_SKIP_TABLE_BUILDER_FLUSH;
+ERL_NIF_TERM ATOM_CACHE_INDEX_AND_FILTER_BLOCKS;
 
 // Related to Read Options
 ERL_NIF_TERM ATOM_VERIFY_CHECKSUMS;
@@ -330,6 +340,42 @@ ERL_NIF_TERM parse_init_option(ErlNifEnv* env, ERL_NIF_TERM item, ErocksdbOption
                 }   // if
             }   // if
         }   // if
+    }
+
+    return erocksdb::ATOM_OK;
+}
+
+ERL_NIF_TERM parse_bbt_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::BlockBasedTableOptions& opts) {
+    int arity;
+    const ERL_NIF_TERM* option;
+    if (enif_get_tuple(env, item, &arity, &option) && 2==arity)
+    {
+        if (option[0] == erocksdb::ATOM_NO_BLOCK_CACHE) {
+            opts.no_block_cache = (option[1] == erocksdb::ATOM_TRUE);
+        } else if (option[0] == erocksdb::ATOM_BLOCK_SIZE) {
+            int block_size;
+            if (enif_get_int(env, option[1], &block_size))
+                opts.block_size = block_size;
+        } else if (option[0] == erocksdb::ATOM_BLOCK_CACHE_SIZE) {
+            ErlNifUInt64 block_cache_size;
+            if (enif_get_uint64(env, option[1], &block_cache_size)) {
+                erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+                priv.block_cache->SetCapacity(block_cache_size);
+                opts.block_cache = priv.block_cache;
+            }
+        } else if (option[0] == erocksdb::ATOM_BLOOM_FILTER_POLICY) {
+            int bits_per_key;
+            if (enif_get_int(env, option[1], &bits_per_key))
+                opts.filter_policy = std::shared_ptr<const rocksdb::FilterPolicy>(rocksdb::NewBloomFilterPolicy(bits_per_key));
+        } else if (option[0] == erocksdb::ATOM_FORMAT_VERSION) {
+            int format_version;
+            if (enif_get_int(env, option[1], &format_version))
+                opts.format_version = format_version;
+        } else if (option[0] == erocksdb::ATOM_SKIP_TABLE_BUILDER_FLUSH) {
+            opts.skip_table_builder_flush = (option[1] == erocksdb::ATOM_TRUE);
+        } else if (option[0] == erocksdb::ATOM_CACHE_INDEX_AND_FILTER_BLOCKS) {
+            opts.cache_index_and_filter_blocks = (option[1] == erocksdb::ATOM_TRUE);
+        }
     }
 
     return erocksdb::ATOM_OK;
@@ -756,6 +802,11 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
 
                 opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));
             }
+        }
+        else if (option[0] == erocksdb::ATOM_BLOCK_BASED_TABLE_OPTIONS) {
+            rocksdb::BlockBasedTableOptions bbtOpts;
+            fold(env, option[1], parse_bbt_option, bbtOpts);
+            opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));
         }
         else if (option[0] == erocksdb::ATOM_IN_MEMORY_MODE)
         {
@@ -1646,6 +1697,7 @@ try
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS, "inplace_update_num_locks");
     ATOM(erocksdb::ATOM_TABLE_FACTORY_BLOCK_CACHE_SIZE, "table_factory_block_cache_size");
     ATOM(erocksdb::ATOM_IN_MEMORY_MODE, "in_memory_mode");
+    ATOM(erocksdb::ATOM_BLOCK_BASED_TABLE_OPTIONS, "block_based_table_options");
 
     // Related to DBOptions
     ATOM(erocksdb::ATOM_TOTAL_THREADS, "total_threads");
@@ -1684,6 +1736,15 @@ try
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
     ATOM(erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN, "skip_stats_update_on_db_open");
     ATOM(erocksdb::ATOM_WAL_RECOVERY_MODE, "wal_recovery_mode");
+
+    // Related to BlockBasedTable Options
+    ATOM(erocksdb::ATOM_NO_BLOCK_CACHE, "no_block_cache");
+    ATOM(erocksdb::ATOM_BLOCK_SIZE, "block_size");
+    ATOM(erocksdb::ATOM_BLOCK_CACHE_SIZE, "block_cache_size");
+    ATOM(erocksdb::ATOM_BLOOM_FILTER_POLICY, "bloom_filter_policy");
+    ATOM(erocksdb::ATOM_FORMAT_VERSION, "format_version");
+    ATOM(erocksdb::ATOM_SKIP_TABLE_BUILDER_FLUSH, "skip_table_builder_flush");
+    ATOM(erocksdb::ATOM_CACHE_INDEX_AND_FILTER_BLOCKS, "cache_index_and_filter_blocks");
 
     // Related to Read Options
     ATOM(erocksdb::ATOM_VERIFY_CHECKSUMS, "verify_checksums");

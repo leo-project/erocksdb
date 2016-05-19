@@ -96,6 +96,14 @@ init() ->
 -opaque itr_handle() :: binary().
 -opaque snapshot_handle() :: binary().
 
+-type block_based_table_options() :: [{no_block_cache, boolean()} |
+                                      {block_size, pos_integer()} |
+                                      {block_cache_size, pos_integer()} |
+                                      {bloom_filter_policy, BitsPerKey :: pos_integer()} |
+                                      {format_version, 0 | 1 | 2} |
+                                      {skip_table_builder_flush, boolean()} |
+                                      {cache_index_and_filter_blocks, boolean()}].
+
 -type cf_options() :: [{block_cache_size_mb_for_point_lookup, non_neg_integer()} |
                        {memtable_memory_budget, pos_integer()} |
                        {write_buffer_size,  pos_integer()} |
@@ -126,7 +134,8 @@ init() ->
                        {inplace_update_support,  boolean()} |
                        {inplace_update_num_locks,  pos_integer()} |
                        {table_factory_block_cache_size, pos_integer()} |
-                       {in_memory_mode, boolean()}].
+                       {in_memory_mode, boolean()} |
+                       {block_based_table_options, block_based_table_options()}].
 
 -type db_options() :: [{total_threads, pos_integer()} |
                        {create_if_missing, boolean()} |

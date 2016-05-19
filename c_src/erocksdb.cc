@@ -289,6 +289,8 @@ struct ErocksdbOptions
 };  // struct ErocksdbOptions
 
 
+static int kCapacity = 4194304; // default values, can be overridden
+
 /** Module-level private data:
  *    singleton instance held by erlang and passed on API calls
  */
@@ -297,10 +299,11 @@ class erocksdb_priv_data
 public:
     ErocksdbOptions m_Opts;
     erocksdb::erocksdb_thread_pool thread_pool;
+    std::shared_ptr<rocksdb::Cache> block_cache;
 
     explicit erocksdb_priv_data(ErocksdbOptions & Options)
     : m_Opts(Options), thread_pool(Options.m_ErocksdbThreads)
-        {}
+        { block_cache = rocksdb::NewLRUCache(kCapacity); }
 
 private:
     erocksdb_priv_data();                                      // no default constructor
@@ -745,8 +748,10 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             ErlNifUInt64 table_factory_block_cache_size;
             if (enif_get_uint64(env, option[1], &table_factory_block_cache_size))
             {
+                erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+                priv.block_cache->SetCapacity(table_factory_block_cache_size);
                 rocksdb::BlockBasedTableOptions bbtOpts;
-                bbtOpts.block_cache = rocksdb::NewLRUCache(table_factory_block_cache_size);
+                bbtOpts.block_cache = priv.block_cache;
                 bbtOpts.filter_policy = std::shared_ptr<const rocksdb::FilterPolicy>(rocksdb::NewBloomFilterPolicy(10));
 
                 opts.table_factory = std::shared_ptr<rocksdb::TableFactory>(rocksdb::NewBlockBasedTableFactory(bbtOpts));

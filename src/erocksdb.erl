@@ -32,6 +32,8 @@
 -export([fold/4, fold/5, fold_keys/4, fold_keys/5]).
 -export([destroy/2, repair/2, is_empty/1]).
 -export([checkpoint/2]).
+-export([flush/1]).
+-export([get_approximate_sizes/4]).
 -export([count/1, count/2, status/1, status/2, status/3]).
 
 -export_type([db_handle/0,
@@ -172,7 +174,9 @@ init() ->
                        {use_adaptive_mutex, boolean()} |
                        {bytes_per_sync, non_neg_integer()} |
                        {skip_stats_update_on_db_open, boolean()} |
-                       {wal_recovery_mode, wal_recovery_mode()}].
+                       {wal_recovery_mode, wal_recovery_mode()} |
+                       {allow_concurrent_memtable_write, boolean()} |
+                       {enable_write_thread_adaptive_yield, boolean()}].
 
 -type read_options() :: [{verify_checksums, boolean()} |
                          {fill_cache, boolean()} |
@@ -514,6 +518,28 @@ checkpoint(DbHandle, Path) ->
     CallerRef = make_ref(),
     async_checkpoint(CallerRef, DbHandle, Path),
     ?WAIT_FOR_REPLY(CallerRef).
+
+%% @doc Flush all mem-table data.
+-spec flush(db_handle()) -> ok | {error, any()}.
+flush(DbHandle) ->
+    CallerRef = make_ref(),
+    async_flush(CallerRef, DbHandle),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_flush(_CallerRef, _DbHandle) ->
+    erlang:nif_error({error, not_loaded}).
+
+%% @doc return the approximate file system space used by keys in a range
+-spec get_approximate_sizes(db_handle(), binary(), binary(), boolean()) -> integer().
+get_approximate_sizes(DbHandle, StartKey, EndKey, IncludeMemtable) ->
+    CallerRef = make_ref(),
+    async_get_approximate_sizes(CallerRef, DbHandle, StartKey, EndKey,
+                                IncludeMemtable),
+    ?WAIT_FOR_REPLY(CallerRef).
+
+async_get_approximate_sizes(_CallerRef, _DbHandle, _StartKey, _EndKey,
+                           _IncludeMemtable) ->
+    erlang:nif_error({error, not_loaded}).
 
 
 %% @doc

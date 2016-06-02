@@ -1,6 +1,6 @@
 REBAR ?= ./rebar
 
-all: compile test
+all: compile
 
 get-deps:
 	./c_src/build_deps.sh get-deps

@@ -67,6 +67,8 @@ static ErlNifFunc nif_funcs[] =
     {"destroy", 2, erocksdb_destroy},
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
+    {"async_flush", 2, erocksdb_flush},
+    {"async_get_approximate_sizes", 5, erocksdb_approximate_sizes},
 
     {"async_open", 4, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
@@ -167,6 +169,9 @@ ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
 ERL_NIF_TERM ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN;
 ERL_NIF_TERM ATOM_WAL_RECOVERY_MODE;
+ERL_NIF_TERM ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE;
+ERL_NIF_TERM ATOM_ENABLE_WRITE_THREAD_ADAPTATIVE_YIELD;
+
 
 // Related to BlockBasedTable Options
 ERL_NIF_TERM ATOM_NO_BLOCK_CACHE;
@@ -192,7 +197,7 @@ ERL_NIF_TERM ATOM_DISABLE_WAL;
 ERL_NIF_TERM ATOM_TIMEOUT_HINT_US;
 ERL_NIF_TERM ATOM_IGNORE_MISSING_COLUMN_FAMILIES;
 
-// Related to Write Actions 
+// Related to Write Actions
 ERL_NIF_TERM ATOM_CLEAR;
 ERL_NIF_TERM ATOM_PUT;
 ERL_NIF_TERM ATOM_DELETE;
@@ -427,7 +432,7 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             ERL_NIF_TERM tail;
             char db_name[4096];
             while(enif_get_list_cell(env, option[1], &head, &tail)) {
-                if (enif_get_string(env, head, db_name, sizeof(db_name), ERL_NIF_LATIN1)) 
+                if (enif_get_string(env, head, db_name, sizeof(db_name), ERL_NIF_LATIN1))
                 {
                     std::string str_db_name(db_name);
                     rocksdb::DbPath db_path(str_db_name, 0);
@@ -593,6 +598,14 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 opts.wal_recovery_mode = rocksdb::WALRecoveryMode::kSkipAnyCorruptedRecords;
             }
         }
+        else if (option[0] == erocksdb::ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE)
+        {
+            opts.allow_concurrent_memtable_write = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_ENABLE_WRITE_THREAD_ADAPTATIVE_YIELD)
+        {
+            opts.enable_write_thread_adaptive_yield = (option[1] == erocksdb::ATOM_TRUE);
+        }
     }
 
     return erocksdb::ATOM_OK;
@@ -605,7 +618,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
     if (enif_get_tuple(env, item, &arity, &option) && 2==arity)
     {
         if (option[0] == erocksdb::ATOM_BLOCK_CACHE_SIZE_MB_FOR_POINT_LOOKUP)
-            // @TODO ignored now 
+            // @TODO ignored now
             ;
         else if (option[0] == erocksdb::ATOM_MEMTABLE_MEMORY_BUDGET)
         {
@@ -838,7 +851,7 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
     }
     return erocksdb::ATOM_OK;
 }
- 
+
 ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadOptions& opts)
 {
     int arity;
@@ -1042,7 +1055,7 @@ async_release_snapshot(
     {
         return send_reply(env, caller_ref, erocksdb::ATOM_OK);
     }
-    
+
     erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
 
     erocksdb::WorkTask* work_item = new erocksdb::ReleaseSnapshotTask(env, caller_ref, snapshot_ptr.get());
@@ -1455,6 +1468,85 @@ erocksdb_close(
 
 
 ERL_NIF_TERM
+erocksdb_flush(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    erocksdb::ReferencePtr<erocksdb::DbObject> db_ptr;
+    db_ptr.assign(erocksdb::DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+        return enif_make_badarg(env);
+
+    if(db_ptr->m_Db == NULL)
+        return error_einval(env);
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::FlushTask(env, caller_ref, db_ptr.get());
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return erocksdb::send_reply(env, caller_ref,
+                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+} // erocksdb_flush
+
+ERL_NIF_TERM
+erocksdb_approximate_sizes(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    const ERL_NIF_TERM& caller_ref = argv[0];
+    const ERL_NIF_TERM& handle_ref = argv[1];
+
+    erocksdb::ReferencePtr<erocksdb::DbObject> db_ptr;
+    db_ptr.assign(erocksdb::DbObject::RetrieveDbObject(env, handle_ref));
+
+    if(NULL==db_ptr.get())
+        return enif_make_badarg(env);
+
+    if(db_ptr->m_Db == NULL)
+        return error_einval(env);
+
+
+    ErlNifBinary start;
+    ErlNifBinary end;
+    std::string start_key;
+    std::string end_key;
+    bool include_memtable;
+
+    // initialize the range
+    if (!enif_inspect_binary(env, argv[2], &start)) return enif_make_badarg(env);
+    start_key.assign((const char *)start.data, start.size);
+    if (!enif_inspect_binary(env, argv[3], &end)) return enif_make_badarg(env);
+    end_key.assign((const char *)end.data, end.size);
+
+
+    if (argv[4] == erocksdb::ATOM_TRUE) {
+        include_memtable = true;
+    } else {
+        include_memtable = false;
+    }
+
+    erocksdb_priv_data& priv = *static_cast<erocksdb_priv_data *>(enif_priv_data(env));
+
+    erocksdb::WorkTask* work_item = new erocksdb::GetApproximateSizesTask(env,
+            caller_ref, db_ptr.get(), start_key, end_key, include_memtable);
+
+    if(false == priv.thread_pool.submit(work_item))
+    {
+        delete work_item;
+        return erocksdb::send_reply(env, caller_ref,
+                enif_make_tuple2(env, erocksdb::ATOM_ERROR, caller_ref));
+    }
+
+    return erocksdb::ATOM_OK;
+} // erocksdb_approximate_size
+
+ERL_NIF_TERM
 erocksdb_iterator_close(
     ErlNifEnv* env,
     int argc,
@@ -1736,6 +1828,9 @@ try
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
     ATOM(erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN, "skip_stats_update_on_db_open");
     ATOM(erocksdb::ATOM_WAL_RECOVERY_MODE, "wal_recovery_mode");
+    ATOM(erocksdb::ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE, "allow_concurrent_memtable_write");
+    ATOM(erocksdb::ATOM_ENABLE_WRITE_THREAD_ADAPTATIVE_YIELD, "enable_write_thread_adaptive_yield");
+
 
     // Related to BlockBasedTable Options
     ATOM(erocksdb::ATOM_NO_BLOCK_CACHE, "no_block_cache");

@@ -13,7 +13,7 @@ SCRIPT=$SCRIPTPATH/${0##*/}
 BASEDIR=$SCRIPTPATH
 BUILD_CONFIG=$BASEDIR/rocksdb/make_config.mk
 
-ROCKSDB_VSN="4.3.1"
+ROCKSDB_VSN="4.9"
 
 SNAPPY_VSN="1.1.1"
 
@@ -36,7 +36,7 @@ MAKE=${MAKE:-make}
 
 case "$1" in
     rm-deps)
-        rm -rf rocksdb system snappy-$SNAPPY_VSN rocksdb-$ROCKSDB_VSN.tar.gz
+        rm -rf rocksdb system snappy-$SNAPPY_VSN rocksdb-*.tar.gz
         ;;
 
     clean)

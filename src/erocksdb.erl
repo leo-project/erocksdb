@@ -129,7 +129,6 @@ init() ->
                        {purge_redundant_kvs_while_flush,  boolean()} |
                        {compaction_style,  compaction_style()} |
                        {verify_checksums_in_compaction,  boolean()} |
-                       {filter_deletes,  boolean()} |
                        {max_sequential_skip_in_iterations,  pos_integer()} |
                        {inplace_update_support,  boolean()} |
                        {inplace_update_num_locks,  pos_integer()} |

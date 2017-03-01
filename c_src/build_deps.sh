@@ -15,7 +15,7 @@ BUILD_CONFIG=$BASEDIR/rocksdb/make_config.mk
 
 ROCKSDB_VSN="4.11.2"
 
-SNAPPY_VSN="1.1.1"
+SNAPPY_VSN="1.1.4"
 
 set -e
 
@@ -36,13 +36,16 @@ MAKE=${MAKE:-make}
 
 case "$1" in
     rm-deps)
-        rm -rf rocksdb system snappy-$SNAPPY_VSN rocksdb-*.tar.gz
+        rm -rf rocksdb system snappy-$SNAPPY_VSN rocksdb-*.tar.gz snappy-*.tar.gz
         ;;
 
     clean)
-        rm -rf system snappy-$SNAPPY_VSN
+        rm -rf system
         if [ -d rocksdb ]; then
             (cd rocksdb && $MAKE clean)
+        fi
+        if [ -d snappy-$SNAPPY_VSN ]; then
+            (cd snappy-$SNAPPY_VSN && $MAKE clean)
         fi
         ;;
 
@@ -65,16 +68,22 @@ case "$1" in
             tar -xzf $ROCKSDBTARGZ
             mv rocksdb-$ROCKSDB_VSN rocksdb
         fi
+        if [ ! -d snappy-$SNAPPY_VSN ]; then
+            SNAPPYURL="https://github.com/google/snappy/releases/download/$SNAPPY_VSN/snappy-$SNAPPY_VSN.tar.gz"
+            SNAPPYTARGZ="snappy-$SNAPPY_VSN.tar.gz"
+            echo Downloading $SNAPPYURL...
+            curl -L -o $SNAPPYTARGZ $SNAPPYURL
+            tar -xzf $SNAPPYTARGZ
+        fi
         ;;
 
     *)
-        if [ ! -d snappy-$SNAPPY_VSN ]; then
-            tar -xzf snappy-$SNAPPY_VSN.tar.gz
-            (cd snappy-$SNAPPY_VSN && ./configure --prefix=$BASEDIR/system --libdir=$BASEDIR/system/lib --with-pic)
-        fi
-
+        sh $SCRIPT get-deps
         if [ ! -f system/lib/libsnappy.a ]; then
-            (cd snappy-$SNAPPY_VSN && $MAKE && $MAKE install)
+            (cd snappy-$SNAPPY_VSN && \
+		./configure --prefix=$BASEDIR/system --libdir=$BASEDIR/system/lib --with-pic && \
+		$MAKE && \
+		$MAKE install)
         fi
 
         export CFLAGS="$CFLAGS -I $BASEDIR/system/include"
@@ -82,7 +91,6 @@ case "$1" in
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
-        sh $SCRIPT get-deps
         if [ ! -f rocksdb/librocksdb.a ]; then
             (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
         fi

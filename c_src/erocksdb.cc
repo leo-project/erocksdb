@@ -1088,6 +1088,7 @@ async_write(
     ERL_NIF_TERM result = fold(env, argv[2], write_batch_item, *batch);
     if(erocksdb::ATOM_OK != result)
     {
+        delete batch;
         return send_reply(env, caller_ref,
                           enif_make_tuple3(env, erocksdb::ATOM_ERROR, caller_ref,
                                            enif_make_tuple2(env, erocksdb::ATOM_BAD_WRITE_ACTION,
@@ -1122,8 +1123,6 @@ async_get(
     const ERL_NIF_TERM& key_ref    = argv[2];
     const ERL_NIF_TERM& opts_ref   = argv[3];
 
-    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
-
     ReferencePtr<DbObject> db_ptr;
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
 
@@ -1138,10 +1137,14 @@ async_get(
         return send_reply(env, caller_ref, error_einval(env));
 
     ERL_NIF_TERM fold_result;
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions();
 
     fold_result = fold(env, opts_ref, parse_read_option, *opts);
     if(fold_result!=erocksdb::ATOM_OK)
+    {
+        delete opts;
         return enif_make_badarg(env);
+    }
 
     erocksdb::WorkTask *work_item = new erocksdb::GetTask(env, caller_ref,
                                                           db_ptr.get(), key_ref, opts);
@@ -1172,11 +1175,8 @@ async_iterator(
 
     const bool keys_only = ((argc == 4) && (argv[3] == ATOM_KEYS_ONLY));
 
-    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
-
     ReferencePtr<DbObject> db_ptr;
     db_ptr.assign(DbObject::RetrieveDbObject(env, dbh_ref));
-
 
     if(NULL==db_ptr.get()
        || !enif_is_list(env, options_ref))
@@ -1189,10 +1189,14 @@ async_iterator(
         return send_reply(env, caller_ref, error_einval(env));
 
     ERL_NIF_TERM fold_result;
+    rocksdb::ReadOptions *opts = new rocksdb::ReadOptions;
 
     fold_result = fold(env, options_ref, parse_read_option, *opts);
     if(fold_result!=erocksdb::ATOM_OK)
+    {
+        delete opts;
         return enif_make_badarg(env);
+    }
 
     erocksdb::WorkTask *work_item = new erocksdb::IterTask(env, caller_ref,
                                                            db_ptr.get(), keys_only, opts);

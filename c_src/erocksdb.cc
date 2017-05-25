@@ -112,9 +112,7 @@ ERL_NIF_TERM ATOM_TARGET_FILE_SIZE_BASE;
 ERL_NIF_TERM ATOM_TARGET_FILE_SIZE_MULTIPLIER;
 ERL_NIF_TERM ATOM_MAX_BYTES_FOR_LEVEL_BASE;
 ERL_NIF_TERM ATOM_MAX_BYTES_FOR_LEVEL_MULTIPLIER;
-ERL_NIF_TERM ATOM_EXPANDED_COMPACTION_FACTOR;
-ERL_NIF_TERM ATOM_SOURCE_COMPACTION_FACTOR;
-ERL_NIF_TERM ATOM_MAX_GRANDPARENT_OVERLAP_FACTOR;
+ERL_NIF_TERM ATOM_MAX_COMPACTION_BYTES;
 ERL_NIF_TERM ATOM_SOFT_RATE_LIMIT;
 ERL_NIF_TERM ATOM_HARD_RATE_LIMIT;
 ERL_NIF_TERM ATOM_ARENA_BLOCK_SIZE;
@@ -706,23 +704,11 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             if (enif_get_int(env, option[1], &max_bytes_for_level_multiplier))
                 opts.max_bytes_for_level_multiplier = max_bytes_for_level_multiplier;
         }
-        else if (option[0] == erocksdb::ATOM_EXPANDED_COMPACTION_FACTOR)
+        else if (option[0] == erocksdb::ATOM_MAX_COMPACTION_BYTES)
         {
-            int expanded_compaction_factor;
-            if (enif_get_int(env, option[1], &expanded_compaction_factor))
-                opts.expanded_compaction_factor = expanded_compaction_factor;
-        }
-        else if (option[0] == erocksdb::ATOM_SOURCE_COMPACTION_FACTOR)
-        {
-            int source_compaction_factor;
-            if (enif_get_int(env, option[1], &source_compaction_factor))
-                opts.source_compaction_factor = source_compaction_factor;
-        }
-        else if (option[0] == erocksdb::ATOM_MAX_GRANDPARENT_OVERLAP_FACTOR)
-        {
-            int max_grandparent_overlap_factor;
-            if (enif_get_int(env, option[1], &max_grandparent_overlap_factor))
-                opts.max_grandparent_overlap_factor = max_grandparent_overlap_factor;
+            unsigned int max_compaction_bytes;
+            if (enif_get_uint(env, option[1], &max_compaction_bytes))
+                opts.max_compaction_bytes = max_compaction_bytes;
         }
         else if (option[0] == erocksdb::ATOM_SOFT_RATE_LIMIT)
         {
@@ -1680,9 +1666,7 @@ try
     ATOM(erocksdb::ATOM_TARGET_FILE_SIZE_MULTIPLIER, "target_file_size_multiplier");
     ATOM(erocksdb::ATOM_MAX_BYTES_FOR_LEVEL_BASE, "max_bytes_for_level_base");
     ATOM(erocksdb::ATOM_MAX_BYTES_FOR_LEVEL_MULTIPLIER, "max_bytes_for_level_multiplier");
-    ATOM(erocksdb::ATOM_EXPANDED_COMPACTION_FACTOR, "expanded_compaction_factor");
-    ATOM(erocksdb::ATOM_SOURCE_COMPACTION_FACTOR, "source_compaction_factor");
-    ATOM(erocksdb::ATOM_MAX_GRANDPARENT_OVERLAP_FACTOR, "max_grandparent_overlap_factor");
+    ATOM(erocksdb::ATOM_MAX_COMPACTION_BYTES, "max_compaction_bytes");
     ATOM(erocksdb::ATOM_SOFT_RATE_LIMIT, "soft_rate_limit");
     ATOM(erocksdb::ATOM_HARD_RATE_LIMIT, "hard_rate_limit");
     ATOM(erocksdb::ATOM_ARENA_BLOCK_SIZE, "arena_block_size");

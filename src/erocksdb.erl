@@ -119,9 +119,7 @@ init() ->
                        {target_file_size_multiplier,  pos_integer()} |
                        {max_bytes_for_level_base,  pos_integer()} |
                        {max_bytes_for_level_multiplier,  pos_integer()} |
-                       {expanded_compaction_factor,  pos_integer()} |
-                       {source_compaction_factor,  pos_integer()} |
-                       {max_grandparent_overlap_factor,  pos_integer()} |
+                       {max_compaction_bytes,  pos_integer()} |
                        {soft_rate_limit,  float()} |
                        {hard_rate_limit,  float()} |
                        {arena_block_size,  integer()} |

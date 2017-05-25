@@ -14,6 +14,11 @@ Erlang bindings to [RocksDB](https://github.com/facebook/rocksdb) datastore.
 
 Passed all the tests derived from [eleveldb](https://github.com/basho/eleveldb)
 
+## Versioning
+
+The release version follows the RocksDB's one.
+For instance, if the version of erocksdb is 4.13.5 then the version of RocksDB erocksdb binds is also 4.13.5.
+
 ## License
 
 erocksdb's license is [Apache License Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)

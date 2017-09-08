@@ -90,6 +90,7 @@ init() ->
                              absolute_consistency |
                              point_in_time_recovery |
                              skip_any_corrupted_records.
+-type read_tier() :: read_all | block_cache | persisted | memtable.
 
 -opaque db_handle() :: binary().
 -opaque cf_handle() :: binary().
@@ -107,6 +108,7 @@ init() ->
 -type cf_options() :: [{block_cache_size_mb_for_point_lookup, non_neg_integer()} |
                        {memtable_memory_budget, pos_integer()} |
                        {write_buffer_size,  pos_integer()} |
+                       {db_write_buffer_size,  pos_integer()} |
                        {max_write_buffer_number,  pos_integer()} |
                        {min_write_buffer_number_to_merge,  pos_integer()} |
                        {compression,  compression_type()} |
@@ -147,8 +149,7 @@ init() ->
                        {db_log_dir, file:filename_all()} |
                        {wal_dir, file:filename_all()} |
                        {delete_obsolete_files_period_micros, pos_integer()} |
-                       {max_background_compactions, pos_integer()} |
-                       {max_background_flushes, pos_integer()} |
+                       {max_background_jobs, pos_integer()} |
                        {max_log_file_size, non_neg_integer()} |
                        {log_file_time_to_roll, non_neg_integer()} |
                        {keep_log_file_num, pos_integer()} |
@@ -168,7 +169,17 @@ init() ->
                        {compaction_readahead_size, non_neg_integer()} |
                        {use_adaptive_mutex, boolean()} |
                        {bytes_per_sync, non_neg_integer()} |
+                       {wal_bytes_per_sync, non_neg_integer()} |
                        {skip_stats_update_on_db_open, boolean()} |
+                       {enable_thread_tracking, boolean()} |
+                       {avoid_flush_during_shutdown, boolean()} |
+                       {avoid_flush_during_recovery, boolean()} |
+                       {dump_malloc_stats, boolean()} |
+                       {enable_write_thread_adaptive_yield, boolean()} |
+                       {allow_concurrent_memtable_write, boolean()} |
+                       {enable_pipelined_write, boolean()} |
+                       {write_thread_slow_yield_usec, non_neg_integer()} |
+                       {write_thread_max_yield_usec, non_neg_integer()} |
                        {wal_recovery_mode, wal_recovery_mode()}].
 
 -type read_options() :: [{verify_checksums, boolean()} |
@@ -176,11 +187,20 @@ init() ->
                          {iterate_upper_bound, binary()} |
                          {tailing, boolean()} |
                          {total_order_seek, boolean()} |
+                         {managed, boolean()} |
+                         {prefix_same_as_start, boolean()} |
+                         {pin_data, boolean()} |
+                         {background_purge_on_iterator_cleanup, boolean()} |
+                         {ignore_range_deletions, boolean()} |
+                         {readahead_size, non_neg_integer()} |
+                         {max_skippable_internal_keys, non_neg_integer()} |
+                         {read_tier, read_tier()} |
                          {snapshot, snapshot_handle()}].
 
 -type write_options() :: [{sync, boolean()} |
                           {disable_wal, boolean()} |
-                          {timeout_hint_us, non_neg_integer()} |
+                          {no_slowdown, boolean()} |
+                          {low_pri, boolean()} |
                           {ignore_missing_column_families, boolean()}].
 
 -type write_actions() :: [{put, Key::binary(), Value::binary()} |

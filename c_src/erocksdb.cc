@@ -100,6 +100,7 @@ ERL_NIF_TERM ATOM_NOT_FOUND;
 ERL_NIF_TERM ATOM_BLOCK_CACHE_SIZE_MB_FOR_POINT_LOOKUP;
 ERL_NIF_TERM ATOM_MEMTABLE_MEMORY_BUDGET;
 ERL_NIF_TERM ATOM_WRITE_BUFFER_SIZE;
+ERL_NIF_TERM ATOM_DB_WRITE_BUFFER_SIZE;
 ERL_NIF_TERM ATOM_MAX_WRITE_BUFFER_NUMBER;
 ERL_NIF_TERM ATOM_MIN_WRITE_BUFFER_NUMBER_TO_MERGE;
 ERL_NIF_TERM ATOM_COMPRESSION;
@@ -119,7 +120,6 @@ ERL_NIF_TERM ATOM_ARENA_BLOCK_SIZE;
 ERL_NIF_TERM ATOM_DISABLE_AUTO_COMPACTIONS;
 ERL_NIF_TERM ATOM_PURGE_REDUNDANT_KVS_WHILE_FLUSH;
 ERL_NIF_TERM ATOM_COMPACTION_STYLE;
-ERL_NIF_TERM ATOM_VERIFY_CHECKSUMS_IN_COMPACTION;
 ERL_NIF_TERM ATOM_FILTER_DELETES;
 ERL_NIF_TERM ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS;
 ERL_NIF_TERM ATOM_INPLACE_UPDATE_SUPPORT;
@@ -136,14 +136,12 @@ ERL_NIF_TERM ATOM_ERROR_IF_EXISTS;
 ERL_NIF_TERM ATOM_PARANOID_CHECKS;
 ERL_NIF_TERM ATOM_MAX_OPEN_FILES;
 ERL_NIF_TERM ATOM_MAX_TOTAL_WAL_SIZE;
-ERL_NIF_TERM ATOM_DISABLE_DATA_SYNC;
 ERL_NIF_TERM ATOM_USE_FSYNC;
 ERL_NIF_TERM ATOM_DB_PATHS;
 ERL_NIF_TERM ATOM_DB_LOG_DIR;
 ERL_NIF_TERM ATOM_WAL_DIR;
 ERL_NIF_TERM ATOM_DELETE_OBSOLETE_FILES_PERIOD_MICROS;
-ERL_NIF_TERM ATOM_MAX_BACKGROUND_COMPACTIONS;
-ERL_NIF_TERM ATOM_MAX_BACKGROUND_FLUSHES;
+ERL_NIF_TERM ATOM_MAX_BACKGROUND_JOBS;
 ERL_NIF_TERM ATOM_MAX_LOG_FILE_SIZE;
 ERL_NIF_TERM ATOM_LOG_FILE_TIME_TO_ROLL;
 ERL_NIF_TERM ATOM_KEEP_LOG_FILE_NUM;
@@ -152,19 +150,27 @@ ERL_NIF_TERM ATOM_TABLE_CACHE_NUMSHARDBITS;
 ERL_NIF_TERM ATOM_WAL_TTL_SECONDS;
 ERL_NIF_TERM ATOM_WAL_SIZE_LIMIT_MB;
 ERL_NIF_TERM ATOM_MANIFEST_PREALLOCATION_SIZE;
-ERL_NIF_TERM ATOM_ALLOW_OS_BUFFER;
 ERL_NIF_TERM ATOM_ALLOW_MMAP_READS;
 ERL_NIF_TERM ATOM_ALLOW_MMAP_WRITES;
 ERL_NIF_TERM ATOM_IS_FD_CLOSE_ON_EXEC;
-ERL_NIF_TERM ATOM_SKIP_LOG_ERROR_ON_RECOVERY;
 ERL_NIF_TERM ATOM_STATS_DUMP_PERIOD_SEC;
 ERL_NIF_TERM ATOM_ADVISE_RANDOM_ON_OPEN;
 ERL_NIF_TERM ATOM_ACCESS_HINT;
 ERL_NIF_TERM ATOM_COMPACTION_READAHEAD_SIZE;
 ERL_NIF_TERM ATOM_USE_ADAPTIVE_MUTEX;
 ERL_NIF_TERM ATOM_BYTES_PER_SYNC;
+ERL_NIF_TERM ATOM_WAL_BYTES_PER_SYNC;
 ERL_NIF_TERM ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN;
+ERL_NIF_TERM ATOM_ENABLE_THREAD_TRACKING;
 ERL_NIF_TERM ATOM_WAL_RECOVERY_MODE;
+ERL_NIF_TERM ATOM_AVOID_FLUSH_DURING_SHUTDOWN;
+ERL_NIF_TERM ATOM_AVOID_FLUSH_DURING_RECOVERY;
+ERL_NIF_TERM ATOM_DUMP_MALLOC_STATS;
+ERL_NIF_TERM ATOM_ENABLE_WRITE_THREAD_ADAPTIVE_YIELD;
+ERL_NIF_TERM ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE;
+ERL_NIF_TERM ATOM_ENABLE_PIPELINED_WRITE;
+ERL_NIF_TERM ATOM_WRITE_THREAD_SLOW_YIELD_USEC;
+ERL_NIF_TERM ATOM_WRITE_THREAD_MAX_YIELD_USEC;
 
 // Related to BlockBasedTable Options
 ERL_NIF_TERM ATOM_NO_BLOCK_CACHE;
@@ -172,7 +178,6 @@ ERL_NIF_TERM ATOM_BLOCK_SIZE;
 ERL_NIF_TERM ATOM_BLOCK_CACHE_SIZE;
 ERL_NIF_TERM ATOM_BLOOM_FILTER_POLICY;
 ERL_NIF_TERM ATOM_FORMAT_VERSION;
-ERL_NIF_TERM ATOM_SKIP_TABLE_BUILDER_FLUSH;
 ERL_NIF_TERM ATOM_CACHE_INDEX_AND_FILTER_BLOCKS;
 
 // Related to Read Options
@@ -182,13 +187,21 @@ ERL_NIF_TERM ATOM_ITERATE_UPPER_BOUND;
 ERL_NIF_TERM ATOM_TAILING;
 ERL_NIF_TERM ATOM_TOTAL_ORDER_SEEK;
 ERL_NIF_TERM ATOM_SNAPSHOT;
-ERL_NIF_TERM ATOM_BAD_SNAPSHOT;
+ERL_NIF_TERM ATOM_READAHEAD_SIZE;
+ERL_NIF_TERM ATOM_MAX_SKIPPABLE_INTERNAL_KEYS;
+ERL_NIF_TERM ATOM_READ_TIER;
+ERL_NIF_TERM ATOM_MANAGED;
+ERL_NIF_TERM ATOM_PREFIX_SAME_AS_START;
+ERL_NIF_TERM ATOM_PIN_DATA;
+ERL_NIF_TERM ATOM_BACKGROUND_PURGE_ON_ITERATOR_CLEANUP;
+ERL_NIF_TERM ATOM_IGNORE_RANGE_DELETIONS;
 
 // Related to Write Options
 ERL_NIF_TERM ATOM_SYNC;
 ERL_NIF_TERM ATOM_DISABLE_WAL;
-ERL_NIF_TERM ATOM_TIMEOUT_HINT_US;
 ERL_NIF_TERM ATOM_IGNORE_MISSING_COLUMN_FAMILIES;
+ERL_NIF_TERM ATOM_NO_SLOWDOWN;
+ERL_NIF_TERM ATOM_LOW_PRI;
 
 // Related to Write Actions 
 ERL_NIF_TERM ATOM_CLEAR;
@@ -244,6 +257,12 @@ ERL_NIF_TERM ATOM_INVALID_ITERATOR;
 
 // Related to NIF initialize parameters
 ERL_NIF_TERM ATOM_WRITE_THREADS;
+
+// Related to Read Tier
+ERL_NIF_TERM ATOM_READ_ALL;
+ERL_NIF_TERM ATOM_BLOCK_CACHE;
+ERL_NIF_TERM ATOM_PERSISTED;
+ERL_NIF_TERM ATOM_MEMTABLE;
 
 }   // namespace erocksdb
 
@@ -369,8 +388,6 @@ ERL_NIF_TERM parse_bbt_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::BlockB
             int format_version;
             if (enif_get_int(env, option[1], &format_version))
                 opts.format_version = format_version;
-        } else if (option[0] == erocksdb::ATOM_SKIP_TABLE_BUILDER_FLUSH) {
-            opts.skip_table_builder_flush = (option[1] == erocksdb::ATOM_TRUE);
         } else if (option[0] == erocksdb::ATOM_CACHE_INDEX_AND_FILTER_BLOCKS) {
             opts.cache_index_and_filter_blocks = (option[1] == erocksdb::ATOM_TRUE);
         }
@@ -411,10 +428,6 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             if (enif_get_uint64(env, option[1], &max_total_wal_size))
                 opts.max_total_wal_size = max_total_wal_size;
         }
-        else if (option[0] == erocksdb::ATOM_DISABLE_DATA_SYNC)
-        {
-            opts.disableDataSync = (option[1] == erocksdb::ATOM_TRUE);
-        }
         else if (option[0] == erocksdb::ATOM_USE_FSYNC)
         {
             opts.use_fsync = (option[1] == erocksdb::ATOM_TRUE);
@@ -451,17 +464,11 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             if (enif_get_uint64(env, option[1], &delete_obsolete_files_period_micros))
                 opts.delete_obsolete_files_period_micros = delete_obsolete_files_period_micros;
         }
-        else if (option[0] == erocksdb::ATOM_MAX_BACKGROUND_COMPACTIONS)
+        else if (option[0] == erocksdb::ATOM_MAX_BACKGROUND_JOBS)
         {
-            int max_background_compactions;
-            if (enif_get_int(env, option[1], &max_background_compactions))
-                opts.max_background_compactions = max_background_compactions;
-        }
-        else if (option[0] == erocksdb::ATOM_MAX_BACKGROUND_FLUSHES)
-        {
-            int max_background_flushes;
-            if (enif_get_int(env, option[1], &max_background_flushes))
-                opts.max_background_flushes = max_background_flushes;
+            int max_background_jobs;
+            if (enif_get_int(env, option[1], &max_background_jobs))
+                opts.max_background_jobs = max_background_jobs;
         }
         else if (option[0] == erocksdb::ATOM_MAX_LOG_FILE_SIZE)
         {
@@ -511,10 +518,6 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             if (enif_get_uint(env, option[1], &manifest_preallocation_size))
                 opts.manifest_preallocation_size = manifest_preallocation_size;
         }
-        else if (option[0] == erocksdb::ATOM_ALLOW_OS_BUFFER)
-        {
-            opts.allow_os_buffer = (option[1] == erocksdb::ATOM_TRUE);
-        }
         else if (option[0] == erocksdb::ATOM_ALLOW_MMAP_READS)
         {
             opts.allow_mmap_reads = (option[1] == erocksdb::ATOM_TRUE);
@@ -526,10 +529,6 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
         else if (option[0] == erocksdb::ATOM_IS_FD_CLOSE_ON_EXEC)
         {
             opts.is_fd_close_on_exec = (option[1] == erocksdb::ATOM_TRUE);
-        }
-        else if (option[0] == erocksdb::ATOM_SKIP_LOG_ERROR_ON_RECOVERY)
-        {
-            opts.skip_log_error_on_recovery = (option[1] == erocksdb::ATOM_TRUE);
         }
         else if (option[0] == erocksdb::ATOM_STATS_DUMP_PERIOD_SEC)
         {
@@ -572,9 +571,55 @@ ERL_NIF_TERM parse_db_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             if (enif_get_uint64(env, option[1], &bytes_per_sync))
                 opts.bytes_per_sync = bytes_per_sync;
         }
+        else if (option[0] == erocksdb::ATOM_WAL_BYTES_PER_SYNC)
+        {
+            ErlNifUInt64 wal_bytes_per_sync;
+            if (enif_get_uint64(env, option[1], &wal_bytes_per_sync))
+                opts.wal_bytes_per_sync = wal_bytes_per_sync;
+        }
         else if (option[0] == erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN)
         {
             opts.skip_stats_update_on_db_open = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_ENABLE_THREAD_TRACKING)
+        {
+            opts.enable_thread_tracking = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_AVOID_FLUSH_DURING_SHUTDOWN)
+        {
+            opts.avoid_flush_during_shutdown = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_AVOID_FLUSH_DURING_RECOVERY)
+        {
+            opts.avoid_flush_during_recovery = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_DUMP_MALLOC_STATS)
+        {
+            opts.dump_malloc_stats = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_ENABLE_WRITE_THREAD_ADAPTIVE_YIELD)
+        {
+            opts.enable_write_thread_adaptive_yield = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE)
+        {
+            opts.allow_concurrent_memtable_write = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_ENABLE_PIPELINED_WRITE)
+        {
+            opts.enable_pipelined_write = (option[1] == erocksdb::ATOM_TRUE);
+        }
+        else if (option[0] == erocksdb::ATOM_WRITE_THREAD_SLOW_YIELD_USEC)
+        {
+            ErlNifUInt64 write_thread_slow_yield_usec;
+            if (enif_get_uint64(env, option[1], &write_thread_slow_yield_usec))
+                opts.write_thread_slow_yield_usec = write_thread_slow_yield_usec;
+        }
+        else if (option[0] == erocksdb::ATOM_WRITE_THREAD_MAX_YIELD_USEC)
+        {
+            ErlNifUInt64 write_thread_max_yield_usec;
+            if (enif_get_uint64(env, option[1], &write_thread_max_yield_usec))
+                opts.write_thread_max_yield_usec = write_thread_max_yield_usec;
         }
         else if (option[0] == erocksdb::ATOM_WAL_RECOVERY_MODE)
         {
@@ -616,6 +661,12 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
             unsigned int write_buffer_size;
             if (enif_get_uint(env, option[1], &write_buffer_size))
                 opts.write_buffer_size = write_buffer_size;
+        }
+        else if (option[0] == erocksdb::ATOM_DB_WRITE_BUFFER_SIZE)
+        {
+            unsigned int db_write_buffer_size;
+            if (enif_get_uint(env, option[1], &db_write_buffer_size))
+                opts.db_write_buffer_size = db_write_buffer_size;
         }
         else if (option[0] == erocksdb::ATOM_MAX_WRITE_BUFFER_NUMBER)
         {
@@ -751,10 +802,6 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 opts.compaction_style = rocksdb::CompactionStyle::kCompactionStyleNone;
             }
         }
-        else if (option[0] == erocksdb::ATOM_VERIFY_CHECKSUMS_IN_COMPACTION)
-        {
-            opts.verify_checksums_in_compaction = (option[1] == erocksdb::ATOM_TRUE);
-        }
         else if (option[0] == erocksdb::ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS)
         {
             ErlNifUInt64 max_sequential_skip_in_iterations;
@@ -812,7 +859,6 @@ ERL_NIF_TERM parse_cf_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Options
                 opts.write_buffer_size = 32 << 20;
                 opts.max_write_buffer_number = 2;
                 opts.min_write_buffer_number_to_merge = 1;
-                opts.disableDataSync = 1;
                 opts.bytes_per_sync = 2 << 20;
             }
         }
@@ -837,6 +883,43 @@ ERL_NIF_TERM parse_read_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::ReadO
             opts.tailing = (option[1] == erocksdb::ATOM_TRUE);
         else if (option[0] == erocksdb::ATOM_TOTAL_ORDER_SEEK)
             opts.total_order_seek = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_MANAGED)
+            opts.managed = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_PREFIX_SAME_AS_START)
+            opts.prefix_same_as_start = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_PIN_DATA)
+            opts.pin_data = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_BACKGROUND_PURGE_ON_ITERATOR_CLEANUP)
+            opts.background_purge_on_iterator_cleanup = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_IGNORE_RANGE_DELETIONS)
+            opts.ignore_range_deletions = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_MAX_SKIPPABLE_INTERNAL_KEYS)
+        {
+            ErlNifUInt64 max_skippable_internal_keys;
+            if (enif_get_uint64(env, option[1], &max_skippable_internal_keys))
+                opts.max_skippable_internal_keys = max_skippable_internal_keys;
+        }
+        else if (option[0] == erocksdb::ATOM_READAHEAD_SIZE)
+        {
+            unsigned int readahead_size;
+            if (enif_get_uint(env, option[1], &readahead_size))
+                opts.readahead_size = readahead_size;
+        }
+        else if (option[0] == erocksdb::ATOM_READ_TIER)
+        {
+            if (option[1] == erocksdb::ATOM_READ_ALL) {
+                opts.read_tier = rocksdb::ReadTier::kReadAllTier;
+            }
+            else if (option[1] == erocksdb::ATOM_BLOCK_CACHE) {
+                opts.read_tier = rocksdb::ReadTier::kBlockCacheTier;
+            }
+            else if (option[1] == erocksdb::ATOM_PERSISTED) {
+                opts.read_tier = rocksdb::ReadTier::kPersistedTier;
+            }
+            else if (option[1] == erocksdb::ATOM_MEMTABLE) {
+                opts.read_tier = rocksdb::ReadTier::kMemtableTier;
+            }
+        }
         else if (option[0] == erocksdb::ATOM_SNAPSHOT)
         {
             erocksdb::ReferencePtr<erocksdb::SnapshotObject> snapshot_ptr;
@@ -862,14 +945,12 @@ ERL_NIF_TERM parse_write_option(ErlNifEnv* env, ERL_NIF_TERM item, rocksdb::Writ
             opts.sync = (option[1] == erocksdb::ATOM_TRUE);
         else if (option[0] == erocksdb::ATOM_DISABLE_WAL)
             opts.disableWAL = (option[1] == erocksdb::ATOM_TRUE);
-        else if (option[0] == erocksdb::ATOM_TIMEOUT_HINT_US)
-        {
-            ErlNifUInt64 timeout_hint_us;
-            if (enif_get_uint64(env, option[1], &timeout_hint_us))
-                opts.timeout_hint_us = timeout_hint_us;
-        }
         else if (option[0] == erocksdb::ATOM_IGNORE_MISSING_COLUMN_FAMILIES)
             opts.ignore_missing_column_families = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_NO_SLOWDOWN)
+            opts.no_slowdown = (option[1] == erocksdb::ATOM_TRUE);
+        else if (option[0] == erocksdb::ATOM_LOW_PRI)
+            opts.low_pri = (option[1] == erocksdb::ATOM_TRUE);
     }
 
     return erocksdb::ATOM_OK;
@@ -1414,28 +1495,19 @@ erocksdb_close(
     const ERL_NIF_TERM argv[])
 {
     erocksdb::DbObject * db_ptr;
-    ERL_NIF_TERM ret_term;
-
-    ret_term=erocksdb::ATOM_OK;
-
     db_ptr=erocksdb::DbObject::RetrieveDbObject(env, argv[0]);
 
     if (NULL!=db_ptr)
     {
         // set closing flag
         erocksdb::ErlRefObject::InitiateCloseRequest(db_ptr);
-
         db_ptr=NULL;
-
-        ret_term=erocksdb::ATOM_OK;
+        return erocksdb::ATOM_OK;
     }   // if
     else
     {
-        ret_term=enif_make_badarg(env);
+        return enif_make_badarg(env);
     }   // else
-
-    return(ret_term);
-
 }  // erocksdb_close
 
 
@@ -1446,30 +1518,20 @@ erocksdb_iterator_close(
     const ERL_NIF_TERM argv[])
 {
     erocksdb::ItrObject * itr_ptr;
-    ERL_NIF_TERM ret_term;
-
-    ret_term=erocksdb::ATOM_OK;
-
     itr_ptr=erocksdb::ItrObject::RetrieveItrObject(env, argv[0], true);
 
     if (NULL!=itr_ptr)
     {
         itr_ptr->ReleaseReuseMove();
-
         // set closing flag ... atomic likely unnecessary (but safer)
         erocksdb::ErlRefObject::InitiateCloseRequest(itr_ptr);
-
         itr_ptr=NULL;
-
-        ret_term=erocksdb::ATOM_OK;
+        return erocksdb::ATOM_OK;
     }   // if
     else
     {
-        ret_term=enif_make_badarg(env);
+        return enif_make_badarg(env);
     }   // else
-
-    return(ret_term);
-
 }   // elveldb_iterator_close
 
 
@@ -1654,6 +1716,7 @@ try
     ATOM(erocksdb::ATOM_BLOCK_CACHE_SIZE_MB_FOR_POINT_LOOKUP, "block_cache_size_mb_for_point_lookup");
     ATOM(erocksdb::ATOM_MEMTABLE_MEMORY_BUDGET, "memtable_memory_budget");
     ATOM(erocksdb::ATOM_WRITE_BUFFER_SIZE, "write_buffer_size");
+    ATOM(erocksdb::ATOM_DB_WRITE_BUFFER_SIZE, "db_write_buffer_size");
     ATOM(erocksdb::ATOM_MAX_WRITE_BUFFER_NUMBER, "max_write_buffer_number");
     ATOM(erocksdb::ATOM_MIN_WRITE_BUFFER_NUMBER_TO_MERGE, "min_write_buffer_number_to_merge");
     ATOM(erocksdb::ATOM_COMPRESSION, "compression");
@@ -1673,7 +1736,6 @@ try
     ATOM(erocksdb::ATOM_DISABLE_AUTO_COMPACTIONS, "disable_auto_compactions");
     ATOM(erocksdb::ATOM_PURGE_REDUNDANT_KVS_WHILE_FLUSH, "purge_redundant_kvs_while_flush");
     ATOM(erocksdb::ATOM_COMPACTION_STYLE, "compaction_style");
-    ATOM(erocksdb::ATOM_VERIFY_CHECKSUMS_IN_COMPACTION, "verify_checksums_in_compaction");
     ATOM(erocksdb::ATOM_MAX_SEQUENTIAL_SKIP_IN_ITERATIONS, "max_sequential_skip_in_iterations");
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_SUPPORT, "inplace_update_support");
     ATOM(erocksdb::ATOM_INPLACE_UPDATE_NUM_LOCKS, "inplace_update_num_locks");
@@ -1689,14 +1751,12 @@ try
     ATOM(erocksdb::ATOM_PARANOID_CHECKS, "paranoid_checks");
     ATOM(erocksdb::ATOM_MAX_OPEN_FILES, "max_open_files");
     ATOM(erocksdb::ATOM_MAX_TOTAL_WAL_SIZE, "max_total_wal_size");
-    ATOM(erocksdb::ATOM_DISABLE_DATA_SYNC, "disable_data_sync");
     ATOM(erocksdb::ATOM_USE_FSYNC, "use_fsync");
     ATOM(erocksdb::ATOM_DB_PATHS, "db_paths");
     ATOM(erocksdb::ATOM_DB_LOG_DIR, "db_log_dir");
     ATOM(erocksdb::ATOM_WAL_DIR, "wal_dir");
     ATOM(erocksdb::ATOM_DELETE_OBSOLETE_FILES_PERIOD_MICROS, "delete_obsolete_files_period_micros");
-    ATOM(erocksdb::ATOM_MAX_BACKGROUND_COMPACTIONS, "max_background_compactions");
-    ATOM(erocksdb::ATOM_MAX_BACKGROUND_FLUSHES, "max_background_flushes");
+    ATOM(erocksdb::ATOM_MAX_BACKGROUND_JOBS, "max_background_jobs");
     ATOM(erocksdb::ATOM_MAX_LOG_FILE_SIZE, "max_log_file_size");
     ATOM(erocksdb::ATOM_LOG_FILE_TIME_TO_ROLL, "log_file_time_to_roll");
     ATOM(erocksdb::ATOM_KEEP_LOG_FILE_NUM, "keep_log_file_num");
@@ -1705,19 +1765,27 @@ try
     ATOM(erocksdb::ATOM_WAL_TTL_SECONDS, "wal_ttl_seconds");
     ATOM(erocksdb::ATOM_WAL_SIZE_LIMIT_MB, "wal_size_limit_mb");
     ATOM(erocksdb::ATOM_MANIFEST_PREALLOCATION_SIZE, "manifest_preallocation_size");
-    ATOM(erocksdb::ATOM_ALLOW_OS_BUFFER, "allow_os_buffer");
     ATOM(erocksdb::ATOM_ALLOW_MMAP_READS, "allow_mmap_reads");
     ATOM(erocksdb::ATOM_ALLOW_MMAP_WRITES, "allow_mmap_writes");
     ATOM(erocksdb::ATOM_IS_FD_CLOSE_ON_EXEC, "is_fd_close_on_exec");
-    ATOM(erocksdb::ATOM_SKIP_LOG_ERROR_ON_RECOVERY, "skip_log_error_on_recovery");
     ATOM(erocksdb::ATOM_STATS_DUMP_PERIOD_SEC, "stats_dump_period_sec");
     ATOM(erocksdb::ATOM_ADVISE_RANDOM_ON_OPEN, "advise_random_on_open");
     ATOM(erocksdb::ATOM_ACCESS_HINT, "access_hint");
     ATOM(erocksdb::ATOM_COMPACTION_READAHEAD_SIZE, "compaction_readahead_size");
     ATOM(erocksdb::ATOM_USE_ADAPTIVE_MUTEX, "use_adaptive_mutex");
     ATOM(erocksdb::ATOM_BYTES_PER_SYNC, "bytes_per_sync");
+    ATOM(erocksdb::ATOM_WAL_BYTES_PER_SYNC, "wal_bytes_per_sync");
     ATOM(erocksdb::ATOM_SKIP_STATS_UPDATE_ON_DB_OPEN, "skip_stats_update_on_db_open");
+    ATOM(erocksdb::ATOM_ENABLE_THREAD_TRACKING, "enable_thread_tracking");
     ATOM(erocksdb::ATOM_WAL_RECOVERY_MODE, "wal_recovery_mode");
+    ATOM(erocksdb::ATOM_AVOID_FLUSH_DURING_SHUTDOWN, "avoid_flush_during_shutdown");
+    ATOM(erocksdb::ATOM_AVOID_FLUSH_DURING_RECOVERY, "avoid_flush_during_recovery");
+    ATOM(erocksdb::ATOM_DUMP_MALLOC_STATS, "dump_malloc_stats");
+    ATOM(erocksdb::ATOM_ENABLE_WRITE_THREAD_ADAPTIVE_YIELD, "enable_write_thread_adaptive_yield");
+    ATOM(erocksdb::ATOM_ALLOW_CONCURRENT_MEMTABLE_WRITE, "allow_concurrent_memtable_write");
+    ATOM(erocksdb::ATOM_ENABLE_PIPELINED_WRITE, "enable_pipelined_write");
+    ATOM(erocksdb::ATOM_WRITE_THREAD_SLOW_YIELD_USEC, "write_thread_slow_yield_usec");
+    ATOM(erocksdb::ATOM_WRITE_THREAD_MAX_YIELD_USEC, "write_thread_max_yield_usec");
 
     // Related to BlockBasedTable Options
     ATOM(erocksdb::ATOM_NO_BLOCK_CACHE, "no_block_cache");
@@ -1725,7 +1793,6 @@ try
     ATOM(erocksdb::ATOM_BLOCK_CACHE_SIZE, "block_cache_size");
     ATOM(erocksdb::ATOM_BLOOM_FILTER_POLICY, "bloom_filter_policy");
     ATOM(erocksdb::ATOM_FORMAT_VERSION, "format_version");
-    ATOM(erocksdb::ATOM_SKIP_TABLE_BUILDER_FLUSH, "skip_table_builder_flush");
     ATOM(erocksdb::ATOM_CACHE_INDEX_AND_FILTER_BLOCKS, "cache_index_and_filter_blocks");
 
     // Related to Read Options
@@ -1735,13 +1802,21 @@ try
     ATOM(erocksdb::ATOM_TAILING,"tailing");
     ATOM(erocksdb::ATOM_TOTAL_ORDER_SEEK,"total_order_seek");
     ATOM(erocksdb::ATOM_SNAPSHOT, "snapshot");
-    ATOM(erocksdb::ATOM_BAD_SNAPSHOT, "bad_snapshot");
+    ATOM(erocksdb::ATOM_MAX_SKIPPABLE_INTERNAL_KEYS, "max_skippable_internal_keys");
+    ATOM(erocksdb::ATOM_READ_TIER, "read_tier");
+    ATOM(erocksdb::ATOM_MANAGED, "managed");
+    ATOM(erocksdb::ATOM_PREFIX_SAME_AS_START, "prefix_same_as_start");
+    ATOM(erocksdb::ATOM_PIN_DATA, "pin_data");
+    ATOM(erocksdb::ATOM_BACKGROUND_PURGE_ON_ITERATOR_CLEANUP, "background_purge_on_iterator_cleanup");
+    ATOM(erocksdb::ATOM_IGNORE_RANGE_DELETIONS, "ignore_range_deletions");
+    ATOM(erocksdb::ATOM_READAHEAD_SIZE, "readahead_size");
 
     // Related to Write Options
     ATOM(erocksdb::ATOM_SYNC, "sync");
     ATOM(erocksdb::ATOM_DISABLE_WAL, "disable_wal");
-    ATOM(erocksdb::ATOM_TIMEOUT_HINT_US, "timeout_hint_us");
     ATOM(erocksdb::ATOM_IGNORE_MISSING_COLUMN_FAMILIES, "ignore_missing_column_families");
+    ATOM(erocksdb::ATOM_NO_SLOWDOWN, "no_slowdown");
+    ATOM(erocksdb::ATOM_LOW_PRI, "low_pri");
 
     // Related to Write Options
     ATOM(erocksdb::ATOM_CLEAR, "clear");
@@ -1798,6 +1873,12 @@ try
     // Related to NIF initialize parameters
     ATOM(erocksdb::ATOM_WRITE_THREADS, "write_threads");
 
+    // Related to Read Tier
+    ATOM(erocksdb::ATOM_READ_ALL, "read_all");
+    ATOM(erocksdb::ATOM_BLOCK_CACHE, "block_cache");
+    ATOM(erocksdb::ATOM_PERSISTED, "persisted");
+    ATOM(erocksdb::ATOM_MEMTABLE, "memtable");
+
 #undef ATOM
 
 
@@ -1820,7 +1901,6 @@ try
         // anything non-zero is "fail"
         ret_val=1;
     }   // else
-    // Initialize common atoms
 
     return ret_val;
 }

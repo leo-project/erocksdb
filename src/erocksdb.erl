@@ -24,7 +24,7 @@
 %%======================================================================
 -module(erocksdb).
 
--export([open/3, open_with_cf/3, close/1]).
+-export([open/3, open/4, open_with_cf/3, close/1]).
 -export([snapshot/1, release_snapshot/1]).
 -export([list_column_families/2, create_column_family/3, drop_column_family/2]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).

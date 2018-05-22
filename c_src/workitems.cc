@@ -29,6 +29,7 @@
 
 #include "rocksdb/cache.h"
 #include "rocksdb/filter_policy.h"
+#include "rocksdb/utilities/db_ttl.h"
 
 // error_tuple duplicated in workitems.cc and erocksdb.cc ... how to fix?
 static ERL_NIF_TERM error_tuple(ErlNifEnv* env, ERL_NIF_TERM error, rocksdb::Status& status)
@@ -142,9 +143,10 @@ OpenTask::OpenTask(
     ErlNifEnv* caller_env,
     ERL_NIF_TERM& _caller_ref,
     const std::string& db_name_,
-    rocksdb::Options *Options_)
+    rocksdb::Options *Options_,
+    int32_t ttl_)
     : WorkTask(caller_env, _caller_ref),
-    db_name(db_name_), options(Options_)
+    db_name(db_name_), options(Options_), ttl(ttl_)
 {
 }   // OpenTask::OpenTask
 
@@ -155,7 +157,18 @@ OpenTask::operator()()
     DbObject * db_ptr;
     rocksdb::DB *db(0);
 
-    rocksdb::Status status = rocksdb::DB::Open(*options, db_name, &db);
+    rocksdb::Status status;
+
+    if(ttl <= 0)
+    {
+        status = rocksdb::DB::Open(*options, db_name, &db);
+    }
+    else
+    {
+         rocksdb::DBWithTTL* db_with_ttl(0);
+         status = rocksdb::DBWithTTL::Open(*options, db_name, &db_with_ttl, ttl);
+         db = db_with_ttl;
+    }
 
     if(!status.ok())
         return error_tuple(local_env(), ATOM_ERROR_DB_OPEN, status);

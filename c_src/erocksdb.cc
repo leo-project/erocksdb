@@ -68,7 +68,7 @@ static ErlNifFunc nif_funcs[] =
     {"repair", 2, erocksdb_repair},
     {"is_empty", 1, erocksdb_is_empty},
 
-    {"async_open", 4, erocksdb::async_open},
+    {"async_open", 5, erocksdb::async_open},
     {"async_write", 4, erocksdb::async_write},
     {"async_get", 4, erocksdb::async_get},
 
@@ -1018,10 +1018,12 @@ async_open(
     const ERL_NIF_TERM argv[])
 {
     char db_name[4096];
+    int32_t ttl;
 
     if(!enif_get_string(env, argv[1], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
        !enif_is_list(env, argv[2]) ||
-       !enif_is_list(env, argv[3]))
+       !enif_is_list(env, argv[3]) ||
+       !enif_get_int(env, argv[4], &ttl))
     {
         return enif_make_badarg(env);
     }   // if
@@ -1035,7 +1037,7 @@ async_open(
     fold(env, argv[3], parse_cf_option, *opts);
 
     erocksdb::WorkTask *work_item = new erocksdb::OpenTask(env, caller_ref,
-                                                              db_name, opts);
+                                                              db_name, opts, ttl);
 
     if(false == priv.thread_pool.submit(work_item))
     {

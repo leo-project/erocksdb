@@ -211,7 +211,7 @@ init() ->
 
 -type iterator_action() :: first | last | next | prev | binary().
 
-async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
+async_open(_CallerRef, _Name, _DBOpts, _CFOpts, _Ttl) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc
@@ -221,8 +221,18 @@ async_open(_CallerRef, _Name, _DBOpts, _CFOpts) ->
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options()).
 open(Name, DBOpts, CFOpts) ->
+    open(Name, DBOpts, CFOpts, 0).
+
+%% @doc
+%% Open RocksDB with the defalut column family and TTL
+-spec(open(Name, DBOpts, CFOpts, Ttl) ->
+             {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
+                                                     DBOpts::db_options(),
+                                                     CFOpts::cf_options(),
+                                                     Ttl::number()).
+open(Name, DBOpts, CFOpts, Ttl) ->
     CallerRef = make_ref(),
-    async_open(CallerRef, Name, DBOpts, CFOpts),
+    async_open(CallerRef, Name, DBOpts, CFOpts, Ttl),
     ?WAIT_FOR_REPLY(CallerRef).
 
 %% @doc

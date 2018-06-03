@@ -211,7 +211,7 @@ init() ->
 
 -type iterator_action() :: first | last | next | prev | binary().
 
-async_open(_CallerRef, _Name, _DBOpts, _CFOpts, _Ttl) ->
+async_open(_CallerRef, _Name, _DBOpts, _CFOpts, _TTL) ->
     erlang:nif_error({error, not_loaded}).
 
 %% @doc
@@ -225,14 +225,14 @@ open(Name, DBOpts, CFOpts) ->
 
 %% @doc
 %% Open RocksDB with the defalut column family and TTL
--spec(open(Name, DBOpts, CFOpts, Ttl) ->
+-spec(open(Name, DBOpts, CFOpts, TTL) ->
              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options(),
-                                                     Ttl::number()).
-open(Name, DBOpts, CFOpts, Ttl) ->
+                                                     TTL::integer()).
+open(Name, DBOpts, CFOpts, TTL) ->
     CallerRef = make_ref(),
-    async_open(CallerRef, Name, DBOpts, CFOpts, Ttl),
+    async_open(CallerRef, Name, DBOpts, CFOpts, TTL),
     ?WAIT_FOR_REPLY(CallerRef).
 
 %% @doc
@@ -623,6 +623,20 @@ open_test() -> [{open_test_Z(), l} || l <- lists:seq(1, 20)].
 open_test_Z() ->
     os:cmd("rm -rf /tmp/erocksdb.open.test"),
     {ok, Ref} = open("/tmp/erocksdb.open.test", [{create_if_missing, true}], []),
+    true = ?MODULE:is_empty(Ref),
+    ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
+    false = ?MODULE:is_empty(Ref),
+    {ok, <<"123">>} = ?MODULE:get(Ref, <<"abc">>, []),
+    {ok, 1} = ?MODULE:count(Ref),
+    not_found = ?MODULE:get(Ref, <<"def">>, []),
+    ok = ?MODULE:delete(Ref, <<"abc">>, []),
+    not_found = ?MODULE:get(Ref, <<"abc">>, []),
+    true = ?MODULE:is_empty(Ref).
+
+open_ttl_test() -> [{open_ttl_test_Z(), l} || l <- lists:seq(1, 20)].
+open_ttl_test_Z() ->
+    os:cmd("rm -rf /tmp/erocksdb.open_ttl.test"),
+    {ok, Ref} = open("/tmp/erocksdb.open_ttl.test", [{create_if_missing, true}], [], 86400),
     true = ?MODULE:is_empty(Ref),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     false = ?MODULE:is_empty(Ref),

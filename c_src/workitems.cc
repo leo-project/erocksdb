@@ -144,9 +144,10 @@ OpenTask::OpenTask(
     ERL_NIF_TERM& _caller_ref,
     const std::string& db_name_,
     rocksdb::Options *Options_,
+    bool use_ttl_,
     int32_t ttl_)
     : WorkTask(caller_env, _caller_ref),
-    db_name(db_name_), options(Options_), ttl(ttl_)
+    db_name(db_name_), options(Options_), use_ttl(use_ttl_), ttl(ttl_)
 {
 }   // OpenTask::OpenTask
 
@@ -159,7 +160,7 @@ OpenTask::operator()()
 
     rocksdb::Status status;
 
-    if(ttl <= 0)
+    if(!use_ttl)
     {
         status = rocksdb::DB::Open(*options, db_name, &db);
     }

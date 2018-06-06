@@ -24,7 +24,7 @@
 %%======================================================================
 -module(erocksdb).
 
--export([open/3, open/4, open_with_cf/3, close/1]).
+-export([open/3, open_with_ttl/4, open_with_cf/3, close/1]).
 -export([snapshot/1, release_snapshot/1]).
 -export([list_column_families/2, create_column_family/3, drop_column_family/2]).
 -export([put/4, put/5, delete/3, delete/4, write/3, get/3, get/4]).
@@ -221,18 +221,20 @@ async_open(_CallerRef, _Name, _DBOpts, _CFOpts, _TTL) ->
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options()).
 open(Name, DBOpts, CFOpts) ->
-    open(Name, DBOpts, CFOpts, 0).
+    CallerRef = make_ref(),
+    async_open(CallerRef, Name, DBOpts, CFOpts, {false, undefined}),
+    ?WAIT_FOR_REPLY(CallerRef).
 
 %% @doc
 %% Open RocksDB with the defalut column family and TTL
--spec(open(Name, DBOpts, CFOpts, TTL) ->
+-spec(open_with_ttl(Name, DBOpts, CFOpts, TTL) ->
              {ok, db_handle()} | {error, any()} when Name::file:filename_all(),
                                                      DBOpts::db_options(),
                                                      CFOpts::cf_options(),
                                                      TTL::integer()).
-open(Name, DBOpts, CFOpts, TTL) ->
+open_with_ttl(Name, DBOpts, CFOpts, TTL) ->
     CallerRef = make_ref(),
-    async_open(CallerRef, Name, DBOpts, CFOpts, TTL),
+    async_open(CallerRef, Name, DBOpts, CFOpts, {true, TTL}),
     ?WAIT_FOR_REPLY(CallerRef).
 
 %% @doc
@@ -636,7 +638,7 @@ open_test_Z() ->
 open_ttl_test() -> [{open_ttl_test_Z(), l} || l <- lists:seq(1, 20)].
 open_ttl_test_Z() ->
     os:cmd("rm -rf /tmp/erocksdb.open_ttl.test"),
-    {ok, Ref} = open("/tmp/erocksdb.open_ttl.test", [{create_if_missing, true}], [], 86400),
+    {ok, Ref} = open_with_ttl("/tmp/erocksdb.open_ttl.test", [{create_if_missing, true}], [], 86400),
     true = ?MODULE:is_empty(Ref),
     ok = ?MODULE:put(Ref, <<"abc">>, <<"123">>, []),
     false = ?MODULE:is_empty(Ref),

@@ -1018,15 +1018,25 @@ async_open(
     const ERL_NIF_TERM argv[])
 {
     char db_name[4096];
-    int32_t ttl;
+    const ERL_NIF_TERM *items;
+    int arity;
 
     if(!enif_get_string(env, argv[1], db_name, sizeof(db_name), ERL_NIF_LATIN1) ||
        !enif_is_list(env, argv[2]) ||
        !enif_is_list(env, argv[3]) ||
-       !enif_get_int(env, argv[4], &ttl))
+       !enif_get_tuple(env, argv[4], &arity, &items) ||
+       arity != 2)
     {
         return enif_make_badarg(env);
     }   // if
+
+    bool use_ttl = enif_is_identical(items[0], erocksdb::ATOM_TRUE) ? true: false;
+    int32_t ttl = 0;
+
+    if(use_ttl && !enif_get_int(env, items[1], &ttl))
+    {
+        return enif_make_badarg(env);
+    }
 
     ERL_NIF_TERM caller_ref = argv[0];
 
@@ -1037,7 +1047,7 @@ async_open(
     fold(env, argv[3], parse_cf_option, *opts);
 
     erocksdb::WorkTask *work_item = new erocksdb::OpenTask(env, caller_ref,
-                                                              db_name, opts, ttl);
+                                                              db_name, opts, use_ttl, ttl);
 
     if(false == priv.thread_pool.submit(work_item))
     {

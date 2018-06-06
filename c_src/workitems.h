@@ -110,12 +110,14 @@ class OpenTask : public WorkTask
 protected:
     std::string         db_name;
     rocksdb::Options   *options;  // associated with db handle, we don't free it
+	bool use_ttl;
     int32_t ttl;
 
 public:
     OpenTask(ErlNifEnv* caller_env, ERL_NIF_TERM& _caller_ref,
              const std::string& db_name_,
              rocksdb::Options *Options_,
+             bool use_ttl,
              int32_t ttl_);
 
 

@@ -110,7 +110,7 @@ class OpenTask : public WorkTask
 protected:
     std::string         db_name;
     rocksdb::Options   *options;  // associated with db handle, we don't free it
-	bool use_ttl;
+    bool use_ttl;
     int32_t ttl;
 
 public:

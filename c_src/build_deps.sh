@@ -78,11 +78,20 @@ case "$1" in
         ;;
 
     *)
+        # Linux and similar...
+        CPUS=`getconf _NPROCESSORS_ONLN 2>/dev/null`
+        # FreeBSD and similar...
+        [ -z "$CPUS" ] && CPUS=`getconf NPROCESSORS_ONLN`
+        # Solaris and similar...
+        [ -z "$CPUS" ] && CPUS=`ksh93 -c 'getconf NPROCESSORS_ONLN'`
+        # Give up...
+        [ -z "$CPUS" ] && CPUS=1
+
         sh $SCRIPT get-deps
         if [ ! -f system/lib/libsnappy.a ]; then
             (cd snappy-$SNAPPY_VSN && \
 		./configure --prefix=$BASEDIR/system --libdir=$BASEDIR/system/lib --with-pic && \
-		$MAKE && \
+		$MAKE -j $CPUS && \
 		$MAKE install)
         fi
 
@@ -92,7 +101,7 @@ case "$1" in
         export LD_LIBRARY_PATH="$BASEDIR/system/lib:$LD_LIBRARY_PATH"
 
         if [ ! -f rocksdb/librocksdb.a ]; then
-            (cd rocksdb && CXXFLAGS=-fPIC $MAKE static_lib)
+            (cd rocksdb && CXXFLAGS=-fPIC $MAKE -j $CPUS static_lib)
         fi
         ;;
 esac

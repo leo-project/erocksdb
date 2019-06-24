@@ -95,6 +95,7 @@ case "$1" in
 		$MAKE install)
         fi
 
+	export PORTABLE=1
         export CFLAGS="$CFLAGS -I $BASEDIR/system/include"
         export CXXFLAGS="$CXXFLAGS -I $BASEDIR/system/include"
         export LDFLAGS="$LDFLAGS -L$BASEDIR/system/lib"
